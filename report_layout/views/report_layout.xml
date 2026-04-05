@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <template id="external_layout_standard_header" inherit_id="web.external_layout_standard">
+
+        <!-- Replace logo+tagline row with: logo left | header image centre | blank right -->
+        <xpath expr="//div[hasclass('d-flex') and hasclass('justify-content-between')]" position="replace">
+
+            <!-- CSS: stabilise Bootstrap grid for wkhtmltopdf (old webkit, no reliable flexbox) -->
+            <style>
+                .o_report_layout_standard .address.row,
+                .o_report_layout_standard #informations.row {
+                    display: table !important;
+                    width: 100% !important;
+                    table-layout: fixed;
+                }
+                .o_report_layout_standard .address.row > div,
+                .o_report_layout_standard #informations.row > div {
+                    display: table-cell !important;
+                    vertical-align: top;
+                }
+                .o_report_layout_standard .address .ms-auto {
+                    margin-left: 0 !important;
+                }
+            </style>
+
+            <div style="display: table; width: 100%; table-layout: fixed;">
+
+                <!-- Left: company logo -->
+                <div style="display: table-cell; width: 25%; vertical-align: middle;">
+                    <img
+                        t-if="company.logo"
+                        t-att-src="image_data_uri(company.logo)"
+                        alt="Logo"
+                        style="max-height: 90px; width: auto; max-width: 100%;"
+                    />
+                </div>
+
+                <!-- Centre: report header image -->
+                <div style="display: table-cell; width: 50%; vertical-align: middle; text-align: center;">
+                    <img
+                        t-if="company.report_header_image"
+                        t-att-src="image_data_uri(company.report_header_image)"
+                        alt="Header"
+                        style="max-height: 90px; width: auto; max-width: 100%;"
+                    />
+                </div>
+
+                <!-- Right: blank -->
+                <div style="display: table-cell; width: 25%;"/>
+
+            </div>
+        </xpath>
+
+        <!-- Remove the now-redundant address row below -->
+        <xpath expr="//div[@name='company_address']/.." position="replace"/>
+
+    </template>
+</odoo>

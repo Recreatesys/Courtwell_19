@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <template id="report_saleorder_quotation_fields"
+              inherit_id="sale.report_saleorder_document">
+
+        <!--
+            address = Shipping Address (right col), or empty span when same as invoice.
+            web.address_layout requires address to be truthy to render the row at all —
+            an empty <span/> keeps it truthy while rendering nothing visible.
+        -->
+        <xpath expr="//t[@t-set='address']" position="replace">
+            <t t-set="address">
+                <t t-if="doc.partner_shipping_id != doc.partner_invoice_id">
+                    <strong>Shipping Address</strong>
+                    <div t-out="doc.partner_shipping_id.name"/>
+                    <div t-field="doc.partner_shipping_id"
+                        t-options='{"widget": "contact", "fields": ["address"], "no_marker": True}'/>
+                    <div t-if="doc.partner_shipping_id.phone" t-out="doc.partner_shipping_id.phone"/>
+                    <div t-if="doc.partner_shipping_id.email" t-out="doc.partner_shipping_id.email"/>
+                </t>
+                <t t-else=""><span/></t>
+            </t>
+        </xpath>
+
+        <!--
+            information_block (left col):
+            - Customer Detail: name only
+            - Attention To: name, phone, email (if set)
+            - Invoicing Address: address, phone, email (no parent company name)
+        -->
+        <xpath expr="//t[@t-set='information_block']/.." position="replace">
+            <t t-set="information_block">
+
+                <strong>Customer Detail</strong>
+                <div t-out="doc.partner_id.name" class="mb-0"/>
+
+                <t t-if="doc.attention_to">
+                    <strong class="d-block mt-3">Attention To</strong>
+                    <div t-out="doc.attention_to.name"/>
+                    <div t-if="doc.attention_to.phone" t-out="doc.attention_to.phone"/>
+                    <div t-if="doc.attention_to.email" t-out="doc.attention_to.email"/>
+                </t>
+
+                <strong class="d-block mt-3">Invoicing Address</strong>
+                <div t-field="doc.partner_invoice_id"
+                    t-options='{"widget": "contact", "fields": ["address", "phone", "email"], "no_marker": True, "phone_icons": True}'/>
+
+            </t>
+        </xpath>
+
+    </template>
+</odoo>

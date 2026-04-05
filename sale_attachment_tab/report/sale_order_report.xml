@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <template id="report_saleorder_attachment_appendix" inherit_id="sale.report_saleorder_document">
+
+        <xpath expr="//div[hasclass('oe_structure')][last()]" position="after">
+            <t t-if="doc.attachment_notes">
+                <style>
+                    .appendix-content { word-break: break-word; overflow-wrap: break-word; }
+                    .appendix-content table { width: 100% !important; table-layout: fixed; word-break: break-word; }
+                    .appendix-content td, .appendix-content th { word-break: break-word; overflow-wrap: break-word; }
+                    .appendix-content img { max-width: 100% !important; height: auto; }
+                    .appendix-content p { margin: 0 0 6pt 0; }
+                </style>
+                <div style="page-break-before: always; padding-top: 8mm;">
+                    <h3 style="margin-bottom: 16px;">Appendix</h3>
+                    <div class="appendix-content" t-out="doc.attachment_notes"/>
+                </div>
+            </t>
+        </xpath>
+
+    </template>
+</odoo>

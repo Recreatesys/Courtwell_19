@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_order_form_attention_to" model="ir.ui.view">
+        <field name="name">sale.order.form.attention.to</field>
+        <field name="model">sale.order</field>
+        <field name="inherit_id" ref="sale.view_order_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='partner_shipping_id']" position="after">
+                <field
+                    name="project_id"
+                    options="{'no_create': True, 'no_quick_create': True}"
+                    readonly="state == 'cancel'"
+                />
+            </xpath>
+            <xpath expr="//field[@name='partner_shipping_id']" position="after">
+                <field
+                    name="attention_to"
+                    options="{'no_quick_create': True}"
+                    domain="[('parent_id', '=', partner_id)]"
+                    context="{'default_parent_id': partner_id}"
+                    readonly="state == 'cancel'"
+                />
+            </xpath>
+        </field>
+    </record>
+</odoo>

@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- List view: add Payment Status column -->
+    <record id="view_task_list_payment_status" model="ir.ui.view">
+        <field name="name">project.task.list.payment.status</field>
+        <field name="model">project.task</field>
+        <field name="inherit_id" ref="project.project_task_view_tree_main_base"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='stage_id']" position="after">
+                <field name="payment_status"
+                       optional="show"
+                       widget="badge"
+                       decoration-success="payment_status == 'paid'"
+                       decoration-warning="payment_status == 'partial'"
+                       decoration-danger="payment_status == 'not_paid'"
+                       decoration-muted="payment_status == 'not_invoiced'"
+                       column_invisible="context.get('default_project_id') and not context.get('show_payment_status')"/>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- Kanban view: add Paid ribbon + load payment_status field -->
+    <record id="view_task_kanban_payment_status" model="ir.ui.view">
+        <field name="name">project.task.kanban.payment.status</field>
+        <field name="model">project.task</field>
+        <field name="inherit_id" ref="project.view_task_kanban"/>
+        <field name="arch" type="xml">
+            <!-- Expose the field so it's available in the kanban record -->
+            <xpath expr="//field[@name='stage_id']" position="after">
+                <field name="payment_status"/>
+            </xpath>
+            <!-- Ribbon inside the card template, before <main> -->
+            <xpath expr="//t[@t-name='card']" position="inside">
+                <widget name="web_ribbon"
+                        title="Paid"
+                        bg_color="text-bg-success"
+                        t-if="record.payment_status.raw_value == 'paid'"/>
+                <widget name="web_ribbon"
+                        title="Partial"
+                        bg_color="text-bg-warning"
+                        t-if="record.payment_status.raw_value == 'partial'"/>
+                <widget name="web_ribbon"
+                        title="Not Paid"
+                        bg_color="text-bg-danger"
+                        t-if="record.payment_status.raw_value == 'not_paid'"/>
+            </xpath>
+        </field>
+    </record>
+</odoo>

@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_crm_project_wizard_form" model="ir.ui.view">
+        <field name="name">crm.project.wizard.form</field>
+        <field name="model">crm.project.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Assign Project">
+                <field name="lead_id" invisible="1"/>
+                <group>
+                    <field name="action_type" widget="radio"/>
+                </group>
+                <group invisible="action_type != 'assign'">
+                    <field name="project_id" options="{'no_create': True}"/>
+                </group>
+                <group invisible="action_type != 'create'">
+                    <field name="project_name"/>
+                    <field name="template_id" options="{'no_create': True}"/>
+                    <field name="follower_partner_ids" widget="many2many_tags"/>
+                </group>
+                <footer>
+                    <button name="action_confirm"
+                            string="Confirm"
+                            type="object"
+                            class="btn-primary"/>
+                    <button string="Cancel" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+</odoo>

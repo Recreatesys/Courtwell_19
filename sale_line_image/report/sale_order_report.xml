@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <template id="report_saleorder_line_image" inherit_id="sale.report_saleorder_document">
+
+        <!-- 1. Add "Image" column header after Description -->
+        <xpath expr="//th[@name='th_description']" position="after">
+            <th name="th_line_image" class="text-center" style="width:160px;">Image</th>
+        </xpath>
+
+        <!-- 2. Add image cell in product rows after the description cell -->
+        <xpath expr="//td[@name='td_product_name']" position="after">
+            <td name="td_line_image" class="text-center align-middle" style="width:160px;">
+                <img
+                    t-if="line.line_image"
+                    t-att-src="image_data_uri(line.line_image)"
+                    style="height:151px; width:auto; max-width:100%; object-fit:contain;"
+                    alt=""
+                />
+            </td>
+        </xpath>
+
+        <!-- 3. Fix section row colspan (+1 for the new Image column) -->
+        <xpath expr="//td[@name='td_section_name']" position="attributes">
+            <attribute name="t-att-colspan">section_name_colspan + 1</attribute>
+        </xpath>
+
+        <!-- 4. Fix combo row colspan (+1 for the new Image column) -->
+        <xpath expr="//td[@name='td_combo_name']" position="attributes">
+            <attribute name="t-att-colspan">3 + 1 + (1 if display_discount else 0) + (1 if display_taxes else 0)</attribute>
+        </xpath>
+
+    </template>
+</odoo>
