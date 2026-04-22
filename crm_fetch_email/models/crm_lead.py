@@ -10,7 +10,8 @@ class CrmLead(models.Model):
         servers = self.env['fetchmail.server'].search([('state', '=', 'done')])
         if not servers:
             raise UserError('No active incoming mail servers found.')
-        servers.fetch_mail()
+        for server in servers:
+            server.fetch_mail()
         return {
             'type': 'ir.actions.client',
             'tag': 'display_notification',
