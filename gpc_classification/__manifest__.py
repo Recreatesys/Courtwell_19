@@ -7,7 +7,7 @@
     'data': [
         'security/ir.model.access.csv',
         'views/gpc_class_views.xml',
-        'data/gpc_class_data.csv',
+        'data/gpc.class.csv',
     ],
     'installable': True,
     'auto_install': False,
