@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- List View -->
+    <record id="gpc_class_view_list" model="ir.ui.view">
+        <field name="name">gpc.class.list</field>
+        <field name="model">gpc.class</field>
+        <field name="arch" type="xml">
+            <list string="GS1 GPC Classes" default_order="segment_code,code">
+                <field name="segment_code"/>
+                <field name="segment_label"/>
+                <field name="code"/>
+                <field name="description"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- Form View -->
+    <record id="gpc_class_view_form" model="ir.ui.view">
+        <field name="name">gpc.class.form</field>
+        <field name="model">gpc.class</field>
+        <field name="arch" type="xml">
+            <form string="GS1 GPC Class">
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="segment_code"/>
+                            <field name="segment_label"/>
+                        </group>
+                        <group>
+                            <field name="code"/>
+                            <field name="description"/>
+                        </group>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- Search View -->
+    <record id="gpc_class_view_search" model="ir.ui.view">
+        <field name="name">gpc.class.search</field>
+        <field name="model">gpc.class</field>
+        <field name="arch" type="xml">
+            <search string="Search GPC Classes">
+                <field name="description"/>
+                <field name="code"/>
+                <field name="segment_code"/>
+                <filter name="filter_segment_10" string="Pet Care/Food" domain="[('segment_code','=','10')]"/>
+                <filter name="filter_segment_47" string="Cleaning/Hygiene" domain="[('segment_code','=','47')]"/>
+                <filter name="filter_segment_50" string="Food/Beverage" domain="[('segment_code','=','50')]"/>
+                <filter name="filter_segment_51" string="Healthcare" domain="[('segment_code','=','51')]"/>
+                <filter name="filter_segment_53" string="Beauty/Personal Care" domain="[('segment_code','=','53')]"/>
+                <filter name="filter_segment_65" string="Computing" domain="[('segment_code','=','65')]"/>
+                <filter name="filter_segment_67" string="Clothing" domain="[('segment_code','=','67')]"/>
+                <filter name="filter_segment_70" string="Arts/Crafts/Needlework" domain="[('segment_code','=','70')]"/>
+                <filter name="filter_segment_72" string="Home Appliances" domain="[('segment_code','=','72')]"/>
+                <filter name="filter_segment_75" string="Furniture/Furnishings" domain="[('segment_code','=','75')]"/>
+                <filter name="filter_segment_78" string="Electrical Supplies" domain="[('segment_code','=','78')]"/>
+                <filter name="filter_segment_80" string="Tools/Equipment" domain="[('segment_code','=','80')]"/>
+                <filter name="filter_segment_83" string="Building Products" domain="[('segment_code','=','83')]"/>
+                <filter name="filter_segment_86" string="Toys/Games" domain="[('segment_code','=','86')]"/>
+                <group expand="0" string="Group By">
+                    <filter name="group_segment" string="Segment" context="{'group_by': 'segment_code'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <!-- Action -->
+    <record id="gpc_class_action" model="ir.actions.act_window">
+        <field name="name">GS1 GPC Classes</field>
+        <field name="res_model">gpc.class</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="gpc_class_view_search"/>
+        <field name="context">{'search_default_group_segment': 1}</field>
+    </record>
+
+    <!-- Menu -->
+    <menuitem
+        id="menu_gpc_root"
+        name="GPC Classification"
+        parent="base.menu_administration"
+        sequence="100"
+    />
+    <menuitem
+        id="menu_gpc_classes"
+        name="GS1 GPC Classes"
+        parent="menu_gpc_root"
+        action="gpc_class_action"
+        sequence="10"
+    />
+
+</odoo>

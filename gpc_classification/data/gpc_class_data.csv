@@ -1,0 +1,523 @@
+id,segment_code,code,description
+gpc_class_10_1_1,10,0100,Pet Care/Food Variety Packs
+gpc_class_10_15_2,10,1500,Pet Drinks
+gpc_class_10_16_3,10,1600,Pet Food
+gpc_class_10_17_4,10,1700,Pet Accessories
+gpc_class_10_18_5,10,1800,Pet Care Variety Packs
+gpc_class_11_1_6,11,0100,Centrifugal Pumps
+gpc_class_11_2_7,11,0200,Reciprocating Pumps
+gpc_class_11_3_8,11,0300,Fire Hydrant Systems
+gpc_class_12_1_9,12,0100,Cannabis - Edibles
+gpc_class_12_2_10,12,0200,Cannabis - Non-Edibles
+gpc_class_12_3_11,12,0300,Tobacco
+gpc_class_12_4_12,12,0400,E-Cigarettes and Accessories
+gpc_class_12_5_13,12,0500,Non-Tobacco/Non-Cannabis Herbal
+gpc_class_12_6_14,12,0600,Smoking Accessories
+gpc_class_12_7_15,12,0700,Tobacco/Cannabis/Herbal Products/Smoking Accessories Variety Packs
+gpc_class_12_8_16,12,0800,Hemp-based - Non-Edibles
+gpc_class_13_1_17,13,0100,Pest/Plant Control Products
+gpc_class_13_2_18,13,0200,Plant Chemicals or Natural Agents/Treatments
+gpc_class_14_1_19,14,0100,Lamps/Light Bulbs/Lighting
+gpc_class_14_2_20,14,0200,Lighting Control Components
+gpc_class_14_3_21,14,0300,Lighting - Other
+gpc_class_14_4_22,14,0400,Torches/Lanterns/Flashlights
+gpc_class_14_5_23,14,0500,Lighting - Replacement Parts/Accessories
+gpc_class_47_1_24,47,0100,Cleaning/Hygiene Products Variety Packs
+gpc_class_47_2_25,47,0200,Cleaning Aids
+gpc_class_47_3_26,47,0300,Laundry and Ironing Aids
+gpc_class_47_15_27,47,1500,Fresheners/Deodorisers
+gpc_class_47_16_28,47,1600,Cleaners
+gpc_class_47_17_29,47,1700,Laundry
+gpc_class_47_19_30,47,1900,Surface Care
+gpc_class_47_2_31,47,2000,Cleaning Variety Packs
+gpc_class_47_21_32,47,2100,Dish Care
+gpc_class_50_1_33,50,0100,Animal-derived Edible Products - Prepared/Processed
+gpc_class_50_2_34,50,0200,Animal-derived Edible Products - Unprepared/Unprocessed
+gpc_class_50_3_35,50,0300,Loose Leaf/Multileaf Salad Greens
+gpc_class_50_4_36,50,0400,Peppers
+gpc_class_50_5_37,50,0500,Solanacea/Others
+gpc_class_50_6_38,50,0600,Citrus
+gpc_class_50_7_39,50,0700,Bananas
+gpc_class_50_8_40,50,0800,Melons
+gpc_class_50_9_41,50,0900,Cucurbits - Inedible Peel
+gpc_class_50_1_42,50,1000,Berries/Small Fruit
+gpc_class_50_11_43,50,1100,Brassica Vegetables
+gpc_class_50_12_44,50,1200,Kiwifruits
+gpc_class_50_13_45,50,1300,Annona
+gpc_class_50_14_46,50,1400,Avocados
+gpc_class_50_15_47,50,1500,Fish - Unprepared/Unprocessed
+gpc_class_50_16_48,50,1600,Fats Edible
+gpc_class_50_17_49,50,1700,Baking/Cooking Mixes/Supplies
+gpc_class_50_18_50,50,1800,Aquatic Plants Unprepared/Unprocessed
+gpc_class_50_19_51,50,1900,Bread
+gpc_class_50_2_52,50,2000,Aquatic Invertebrates - Prepared/Processed
+gpc_class_50_21_53,50,2100,Biscuits/Cookies
+gpc_class_50_22_54,50,2200,Alcoholic Beverages (Includes De-Alcoholised Variants)
+gpc_class_50_23_55,50,2300,Aquatic Invertebrates - Unprepared/Unprocessed
+gpc_class_50_24_56,50,2400,Ferns
+gpc_class_50_25_57,50,2500,Aquatic Invertebrates/Fish/Shellfish/Seafood Combination
+gpc_class_50_26_58,50,2600,Coffee/Coffee Substitutes
+gpc_class_50_27_59,50,2700,Sedges
+gpc_class_50_29_60,50,2900,Pasta/Noodles
+gpc_class_50_3_61,50,3000,Baby/Infant - Foods/Beverages
+gpc_class_50_31_62,50,3100,Vegetable Based Products / Meals
+gpc_class_50_32_63,50,3200,Grain Based Products / Meals
+gpc_class_50_33_64,50,3300,Dough Based Products / Meals
+gpc_class_50_34_65,50,3400,Prepared/Preserved Foods Variety Packs
+gpc_class_50_35_66,50,3500,Dairy/Egg Based Products / Meals
+gpc_class_50_38_67,50,3800,Ready-Made Combination Meals
+gpc_class_51_1_68,51,0100,Healthcare Variety Packs
+gpc_class_51_2_69,51,0200,Veterinary Medical Devices
+gpc_class_51_15_70,51,1500,Barrier Contraception
+gpc_class_51_16_71,51,1600,Diagnostic Tests
+gpc_class_51_17_72,51,1700,First Aid
+gpc_class_51_18_73,51,1800,Family Planning Variety Packs
+gpc_class_51_19_74,51,1900,Energy/Stimulant Products
+gpc_class_51_21_75,51,2100,Sensory Organs Care/Treatments
+gpc_class_51_22_76,51,2200,Baby Treatments/Aids
+gpc_class_51_23_77,51,2300,Health Treatments/Aids Variety Packs
+gpc_class_51_24_78,51,2400,Bladder/Genital/Rectal Products
+gpc_class_51_25_79,51,2500,Pain Relief Products
+gpc_class_51_26_80,51,2600,Flower/Homoeopathic/Homeopathic Remedies
+gpc_class_51_27_81,51,2700,Gastrointestinal Remedy Products
+gpc_class_51_28_82,51,2800,Sleeping/Stress Relieving Products
+gpc_class_51_29_83,51,2900,Respiratory/Allergy Products
+gpc_class_51_3_84,51,3000,Skin/Scalp Aid Products
+gpc_class_51_31_85,51,3100,Travel Sickness Products
+gpc_class_51_32_86,51,3200,Enteral Feeding Equipment
+gpc_class_51_33_87,51,3300,Oral/Mouth Treatments
+gpc_class_51_34_88,51,3400,Health Treatments/Aids Materials
+gpc_class_53_1_89,53,0100,Beauty/Personal Care/Hygiene Variety Packs
+gpc_class_53_1_90,53,1000,Body Massage/Toning
+gpc_class_53_11_91,53,1100,General Personal Hygiene
+gpc_class_53_12_92,53,1200,Feminine/Nursing Hygiene
+gpc_class_53_13_93,53,1300,Adult Incontinence
+gpc_class_53_14_94,53,1400,Cosmetics/Fragrances Variety Packs
+gpc_class_53_15_95,53,1500,Aromatherapy
+gpc_class_53_16_96,53,1600,Personal Hygiene Products Variety Packs
+gpc_class_53_17_97,53,1700,Baby Diapers/Accessories
+gpc_class_53_18_98,53,1800,Child Incontinence
+gpc_class_58_1_99,58,0100,Cross Segment
+gpc_class_60_1_100,60,0100,Textual/Printed/Reference Materials Variety Packs
+gpc_class_60_2_101,60,0200,Books
+gpc_class_60_3_102,60,0300,Periodicals
+gpc_class_60_4_103,60,0400,Maps
+gpc_class_61_2_104,61,0200,Musical Instruments (Non Powered)
+gpc_class_61_3_105,61,0300,Musical Instruments (Powered)
+gpc_class_61_4_106,61,0400,Musical Instrument Accessories
+gpc_class_61_5_107,61,0500,Musical Instruments/Accessories Variety Packs
+gpc_class_62_1_108,62,0100,Gift Wrap/Accessories
+gpc_class_62_2_109,62,0200,Greeting Cards/Gift Wrap/Occasion Supplies Variety Packs
+gpc_class_62_3_110,62,0300,Greeting Cards/Invitations
+gpc_class_62_4_111,62,0400,Occasion Supplies
+gpc_class_62_5_112,62,0500,Postal/Packaging Equipment/Aids/Accessories
+gpc_class_62_6_113,62,0600,Presentation Equipment
+gpc_class_62_7_114,62,0700,Stationery Adhesives/Binders/Fasteners
+gpc_class_62_8_115,62,0800,Stationery Cutters/Trimmers
+gpc_class_62_9_116,62,0900,Stationery Storage/Filing
+gpc_class_62_1_117,62,1000,Stationery/Office Machinery Variety Packs
+gpc_class_62_11_118,62,1100,Stationery Paper/Card/Film
+gpc_class_62_12_119,62,1200,Stationery/Office Machinery - Other
+gpc_class_63_1_120,63,0100,Athletic Footwear
+gpc_class_63_2_121,63,0200,Footwear Accessories
+gpc_class_63_3_122,63,0300,General Purpose Footwear
+gpc_class_63_4_123,63,0400,Indoor Footwear
+gpc_class_63_5_124,63,0500,Safety/Protective Footwear
+gpc_class_64_1_125,64,0100,Jewellery
+gpc_class_64_2_126,64,0200,Personal Carriers/Accessories
+gpc_class_64_3_127,64,0300,Watches
+gpc_class_64_4_128,64,0400,Personal Accessories Variety Packs
+gpc_class_65_1_129,65,0100,Computer/Video Game Accessories
+gpc_class_65_2_130,65,0200,Computer Components
+gpc_class_65_3_131,65,0300,Computer Drives
+gpc_class_65_4_132,65,0400,Computer/Video Game Software
+gpc_class_65_5_133,65,0500,Computers
+gpc_class_65_6_134,65,0600,Computer/Video Game Control/Input Devices
+gpc_class_65_7_135,65,0700,Computer/Video Game Peripherals
+gpc_class_65_8_136,65,0800,Computer Networking Equipment
+gpc_class_65_9_137,65,0900,Computers/Video Games Variety Packs
+gpc_class_65_1_138,65,1000,Video Game Consoles
+gpc_class_66_1_139,66,0100,Communication Accessories
+gpc_class_66_2_140,66,0200,Fixed Communication Devices
+gpc_class_66_3_141,66,0300,Mobile Communication Devices/Services
+gpc_class_66_4_142,66,0400,Communication Variety Packs
+gpc_class_66_5_143,66,0500,Signage
+gpc_class_67_1_144,67,0100,Activewear
+gpc_class_67_2_145,67,0200,Full Body Wear
+gpc_class_67_3_146,67,0300,Lower Body Wear/Bottoms
+gpc_class_67_8_147,67,0800,Upper Body Wear/Tops
+gpc_class_67_11_148,67,1100,Clothing Variety Packs
+gpc_class_68_1_149,68,0100,Audio Visual/Photography Variety Packs
+gpc_class_68_2_150,68,0200,Car Audio
+gpc_class_68_3_151,68,0300,In-car Electronics Variety Packs
+gpc_class_68_4_152,68,0400,Home Audio Equipment
+gpc_class_68_7_153,68,0700,Audio Visual Accessories
+gpc_class_68_8_154,68,0800,Audio Visual Equipment Variety Packs
+gpc_class_68_9_155,68,0900,Video Receiving/Installation
+gpc_class_70_1_156,70,0100,Artists Painting/Drawing Supplies
+gpc_class_70_7_157,70,0700,Paper/Card Making Craft Supplies
+gpc_class_70_13_158,70,1300,Arts/Crafts/Needlework Variety Packs
+gpc_class_70_14_159,70,1400,Arts/Crafts/Needlework Supplies
+gpc_class_70_15_160,70,1500,Arts/Crafts/Needlework Tools
+gpc_class_70_16_161,70,1600,Arts/Crafts/Needlework Storage/Organizers
+gpc_class_71_1_162,71,0100,Baby Exercisers/Transportation
+gpc_class_71_2_163,71,0200,Sports Balls/Pucks/Shuttlecocks/Frisbees/Boomerangs
+gpc_class_71_3_164,71,0300,Racquet Sports Equipment
+gpc_class_71_4_165,71,0400,Sports Bats/Sticks/Clubs/Cues/Mallets
+gpc_class_71_5_166,71,0500,Snow/Ice Sports Equipment
+gpc_class_71_6_167,71,0600,Trekking/Mountaineering Sports Equipment
+gpc_class_71_7_168,71,0700,Combat Sports Equipment
+gpc_class_71_8_169,71,0800,Cycle Sports Equipment
+gpc_class_71_9_170,71,0900,Personal Fitness Sports Equipment
+gpc_class_71_1_171,71,1000,Gymnastics Sports Equipment
+gpc_class_71_11_172,71,1100,Kiting/Parachuting Sports Equipment
+gpc_class_71_12_173,71,1200,Scooter/Skate Sports Equipment
+gpc_class_71_13_174,71,1300,Swimming/Surfing/Diving Sports Equipment
+gpc_class_71_14_175,71,1400,Sports Tables
+gpc_class_71_15_176,71,1500,Target Sports Equipment
+gpc_class_71_16_177,71,1600,Sporting Firearms Equipment
+gpc_class_71_17_178,71,1700,Hunting Sports Aids
+gpc_class_71_18_179,71,1800,Watercraft Sports Equipment
+gpc_class_71_19_180,71,1900,Sports Equipment Accessories
+gpc_class_71_2_181,71,2000,Sports Personal Protective Equipment
+gpc_class_71_21_182,71,2100,Fishing/Angling Sports Equipment
+gpc_class_71_23_183,71,2300,Sports Equipment Variety Packs
+gpc_class_71_24_184,71,2400,Equestrian Sports Equipment
+gpc_class_72_1_185,72,0100,Small Cooking/Heating Appliances
+gpc_class_72_2_186,72,0200,Food/Beverage Preparation Appliances
+gpc_class_72_3_187,72,0300,Laundry Care Appliances
+gpc_class_72_4_188,72,0400,Cleaning Appliances
+gpc_class_72_5_189,72,0500,Major Laundry Appliances
+gpc_class_72_6_190,72,0600,Kitchen Washing Appliances
+gpc_class_72_7_191,72,0700,Major Water Dispensers
+gpc_class_72_8_192,72,0800,Smart Home/Home Automation Equipment
+gpc_class_73_1_193,73,0100,Baby Tableware
+gpc_class_73_2_194,73,0200,Dinnerware (Non Disposable)
+gpc_class_73_3_195,73,0300,Drinkware (Non Disposable)
+gpc_class_73_4_196,73,0400,Cookware/Bakeware
+gpc_class_73_5_197,73,0500,Barware (Non Disposable)
+gpc_class_73_6_198,73,0600,Food Preparation Equipment
+gpc_class_73_7_199,73,0700,Tableware (Disposable)
+gpc_class_73_8_200,73,0800,Kitchen Merchandise Variety Packs
+gpc_class_73_9_201,73,0900,Food/Beverage Presentation Accessories
+gpc_class_73_1_202,73,1000,Disposable Food Containers
+gpc_class_74_1_203,74,0100,Tents/Weather Structures
+gpc_class_74_2_204,74,0200,Camping Heating/Lighting Equipment
+gpc_class_74_3_205,74,0300,Camping Furniture/Furnishings
+gpc_class_74_4_206,74,0400,Camping Cooking/Drinking/Eating Equipment
+gpc_class_74_5_207,74,0500,Camping Washing/Sanitary Equipment
+gpc_class_74_6_208,74,0600,Camping Variety Packs
+gpc_class_75_1_209,75,0100,Baby Sanitary Furnishings
+gpc_class_75_2_210,75,0200,Household Baby Beds/Mattresses
+gpc_class_75_3_211,75,0300,Fabric/Textile Furnishings Variety Packs
+gpc_class_75_4_212,75,0400,Clocks
+gpc_class_75_5_213,75,0500,Household/Office Furniture Variety Packs
+gpc_class_75_6_214,75,0600,Household/Office Furniture Accessories
+gpc_class_75_7_215,75,0700,Decorative Banners/Flags
+gpc_class_75_8_216,75,0800,Decorative Banners/Flags - Accessories
+gpc_class_77_1_217,77,0100,Agricultural Machinery
+gpc_class_77_2_218,77,0200,Automotive Body Repair
+gpc_class_77_3_219,77,0300,Automotive Cargo Management
+gpc_class_77_4_220,77,0400,Automotive Appearance Chemicals
+gpc_class_77_5_221,77,0500,Automotive Performance Chemicals
+gpc_class_77_9_222,77,0900,Automotive Transmission Fluid
+gpc_class_77_12_223,77,1200,Automotive Maintenance/Repair
+gpc_class_77_13_224,77,1300,Automotive Safety
+gpc_class_77_14_225,77,1400,Automotive Interior Accessories - Seats
+gpc_class_77_15_226,77,1500,Automotive Interior Accessories - Organisation
+gpc_class_77_16_227,77,1600,Automotive Interior Accessories - Convenience
+gpc_class_77_17_228,77,1700,Automotive Interior Accessories - Sun Protection
+gpc_class_77_18_229,77,1800,Automotive Interior Accessories - Steering
+gpc_class_77_19_230,77,1900,Automotive Interior Accessories - Interior Flooring
+gpc_class_77_2_231,77,2000,Automotive Interior Accessories - Interior Dash
+gpc_class_77_21_232,77,2100,Automotive Interior Accessories - Decorative
+gpc_class_77_22_233,77,2200,Automotive Exterior Accessories - Running Boards/Steps
+gpc_class_77_23_234,77,2300,Automotive Exterior Accessories - Grills/Bumpers
+gpc_class_77_24_235,77,2400,Automotive Exterior Accessories - Shields/Deflectors
+gpc_class_77_25_236,77,2500,Automotive Exterior Accessories - Coverings/Protection
+gpc_class_77_26_237,77,2600,Automotive Exterior Appearance Accessories
+gpc_class_77_27_238,77,2700,Automotive Tyres/Wheels
+gpc_class_77_28_239,77,2800,Automotive Tyres/Wheels Accessories
+gpc_class_77_29_240,77,2900,Automotive Appearance/Fragrance Accessories
+gpc_class_77_31_241,77,3100,Automotive Towing/Hitch
+gpc_class_77_32_242,77,3200,Automotive Towing/Hitch - Electrical
+gpc_class_77_33_243,77,3300,Automotive Trailers/Trailer Accessories
+gpc_class_77_34_244,77,3400,Automotive Winches/Winch Accessories
+gpc_class_77_35_245,77,3500,Automotive Anti-theft Products
+gpc_class_77_36_246,77,3600,Automotive Wipers/Wiper Parts
+gpc_class_77_37_247,77,3700,Automotive Spark Plugs/Glow Plugs/ Injectors
+gpc_class_77_38_248,77,3800,Automotive Filters
+gpc_class_77_39_249,77,3900,Automotive Lights/Bulbs
+gpc_class_77_4_250,77,4000,Automotive Light Assemblies
+gpc_class_77_41_251,77,4100,Automotive Decorative Lighting
+gpc_class_77_43_252,77,4300,Automotive Electrical
+gpc_class_77_45_253,77,4500,Automotive Fluid Management Accessories
+gpc_class_77_47_254,77,4700,Automotive Fluid Change Items
+gpc_class_77_49_255,77,4900,Automotive Window Washer Fluid
+gpc_class_77_5_256,77,5000,Automotive Batteries
+gpc_class_77_51_257,77,5100,Automotive Antifreeze
+gpc_class_77_53_258,77,5300,Automotive Brakes
+gpc_class_78_1_259,78,0100,Cabling/Wiring Management/Control
+gpc_class_78_3_260,78,0300,Electrical Cables
+gpc_class_78_4_261,78,0400,Electrical Wiring
+gpc_class_78_5_262,78,0500,Electrical Connection
+gpc_class_78_6_263,78,0600,Electrical Distribution
+gpc_class_78_11_264,78,1100,Batteries/Chargers
+gpc_class_78_12_265,78,1200,Electrical Generation
+gpc_class_79_1_266,79,0100,Sanitary Ware
+gpc_class_79_3_267,79,0300,Bathroom Fittings
+gpc_class_79_4_268,79,0400,Water Storage/Treatment
+gpc_class_79_5_269,79,0500,Heating Equipment
+gpc_class_79_6_270,79,0600,Air Conditioning/Cooling/Ventilation Equipment
+gpc_class_79_7_271,79,0700,Plumbing/Heating/Ventilation/Air Conditioning Variety Packs
+gpc_class_79_8_272,79,0800,Water/Gas Supply/Central Heating
+gpc_class_79_9_273,79,0900,Waste/Sewage Equipment
+gpc_class_79_1_274,79,1000,Backflow Prevention Devices
+gpc_class_79_13_275,79,1300,Plumbing/Heating/Ventilation/Air Conditioning
+gpc_class_79_14_276,79,1400,Health and Wellness
+gpc_class_80_1_277,80,0100,Measuring/Levelling/Marking Tools
+gpc_class_80_2_278,80,0200,Drywall Tools
+gpc_class_80_3_279,80,0300,Masonry/Glass/Tile Tools
+gpc_class_80_4_280,80,0400,Carrying/Lifting/Climbing/Handling Equipment
+gpc_class_80_5_281,80,0500,Demolition/Removal Tools
+gpc_class_80_6_282,80,0600,Nailers/Staplers/Riveting Tools
+gpc_class_80_7_283,80,0700,Screwdrivers
+gpc_class_80_8_284,80,0800,Pliers/Pincers/Grabbers/Cutting Tools
+gpc_class_80_9_285,80,0900,Vises/Clamps
+gpc_class_80_1_286,80,1000,Grinders/Sharpeners/Scrapers/Sanders
+gpc_class_80_11_287,80,1100,Drills
+gpc_class_80_13_288,80,1300,Awls/Punches/Nailsets
+gpc_class_80_14_289,80,1400,Knives
+gpc_class_80_15_290,80,1500,Chisels/Gouges
+gpc_class_80_16_291,80,1600,Hammers/Mallets/Hatchets/Anvils
+gpc_class_80_17_292,80,1700,Wrenches/Spanners/Keys
+gpc_class_80_18_293,80,1800,Saws
+gpc_class_80_19_294,80,1900,Planes/Shapers/Files/Rasps
+gpc_class_80_2_295,80,2000,Pipe/Tube Tools
+gpc_class_80_22_296,80,2200,Threading Taps/Dies
+gpc_class_80_23_297,80,2300,Tools/Equipment Variety Packs
+gpc_class_80_24_298,80,2400,Funnels
+gpc_class_80_27_299,80,2700,Heat Generating/Welding Tools
+gpc_class_80_28_300,80,2800,Tools/Equipment Other
+gpc_class_80_29_301,80,2900,Military - Engineering Specialty Equipment
+gpc_class_80_3_302,80,3000,Oscillating/Rotary Tools
+gpc_class_80_31_303,80,3100,Concrete Tools
+gpc_class_80_32_304,80,3200,Lubrication/Adhesive Tools
+gpc_class_80_33_305,80,3300,Sprayers
+gpc_class_80_34_306,80,3400,Air Compressors
+gpc_class_80_35_307,80,3500,Vacuum Cleaners Equipment
+gpc_class_80_36_308,80,3600,Carpentry Tools
+gpc_class_80_37_309,80,3700,Scissors/Shears
+gpc_class_81_1_310,81,0100,Garden Pools/Ponds/Water Features and Ornaments
+gpc_class_81_3_311,81,0300,Lawn/Garden Furniture/Furnishings
+gpc_class_81_4_312,81,0400,Lawn/Garden Watering Equipment
+gpc_class_81_5_313,81,0500,Lawn/Garden Fencing
+gpc_class_81_7_314,81,0700,Lawn/Garden Waste Disposal
+gpc_class_81_8_315,81,0800,Lawn/Garden Cooking/Heating Appliances
+gpc_class_81_1_316,81,1000,Lawn/Garden Outdoor Structures
+gpc_class_81_11_317,81,1100,Lawn/Garden Weather Monitoring/Observation
+gpc_class_81_12_318,81,1200,Lawn/Garden Equipment and Tools
+gpc_class_81_14_319,81,1400,Lawn/Garden Testing Diagnostic Equipment
+gpc_class_81_15_320,81,1500,Lawn/Garden Soil/Soil Amendments
+gpc_class_81_18_321,81,1800,Lawn/Garden Floral/Plant Accessories
+gpc_class_81_19_322,81,1900,Lawn/Garden Tiles
+gpc_class_83_1_323,83,0100,Wall/Ceiling/Flooring Coverings
+gpc_class_83_3_324,83,0300,Insulation
+gpc_class_83_4_325,83,0400,Painting
+gpc_class_83_5_326,83,0500,Building Products Variety Packs
+gpc_class_83_6_327,83,0600,Asphalt/Concrete/Masonry
+gpc_class_83_7_328,83,0700,Structural Components/Assemblies
+gpc_class_83_8_329,83,0800,Lumber/Wood Panel/Gypsum
+gpc_class_83_9_330,83,0900,Window Parts/Accessories
+gpc_class_83_1_331,83,1000,Mouldings/Millwork/Stair Parts
+gpc_class_83_11_332,83,1100,Doors
+gpc_class_83_12_333,83,1200,Door Hardware
+gpc_class_83_13_334,83,1300,Glass
+gpc_class_83_14_335,83,1400,Guttering/Drainage
+gpc_class_83_15_336,83,1500,Decking/Railing
+gpc_class_83_17_337,83,1700,Roofing
+gpc_class_83_18_338,83,1800,Abrasives
+gpc_class_83_19_339,83,1900,Fixings/Fasteners Hardware
+gpc_class_83_2_340,83,2000,Curtain Parts/Accessories
+gpc_class_83_21_341,83,2100,Sealants/Fillers/Adhesives/Defect Agents
+gpc_class_83_22_342,83,2200,Windows
+gpc_class_83_23_343,83,2300,Siding/Exterior Trim
+gpc_class_83_24_344,83,2400,Building Products - Other
+gpc_class_83_25_345,83,2500,Access Covers/Panels
+gpc_class_83_26_346,83,2600,Outdoor Roof/Shelter Structures
+gpc_class_84_1_347,84,0100,Tool Storage
+gpc_class_84_2_348,84,0200,Workshop Aids
+gpc_class_85_2_349,85,0200,Protective Collective Aids - DIY
+gpc_class_86_1_350,86,0100,Board Games/Cards/Puzzles
+gpc_class_86_2_351,86,0200,Dolls/Puppets/Action Figures/Soft Toys
+gpc_class_86_3_352,86,0300,Dolls/Puppets/Action Figures/Soft Toys Accessories
+gpc_class_86_4_353,86,0400,Developmental/Educational Toys
+gpc_class_86_5_354,86,0500,Fancy Dress Costumes/Accessories
+gpc_class_86_6_355,86,0600,Musical Toys
+gpc_class_86_7_356,86,0700,Indoor/Outdoor Games/Play Structures
+gpc_class_86_8_357,86,0800,Table Games
+gpc_class_86_9_358,86,0900,Toys/Games Variety Packs
+gpc_class_86_1_359,86,1000,Toys - Ride-on
+gpc_class_86_11_360,86,1100,Toy Vehicles - Non-ride
+gpc_class_86_12_361,86,1200,Role Play Toys
+gpc_class_86_13_362,86,1300,Toys/Games - Other
+gpc_class_87_1_363,87,0100,Fuels/Ignition Aids
+gpc_class_87_2_364,87,0200,Fluids/Fuel Storage
+gpc_class_87_5_365,87,0500,Fuels/Fuel Additives Variety Packs
+gpc_class_88_1_366,88,0100,Lubricants Variety Packs
+gpc_class_88_2_367,88,0200,Lubricants/Protective Compounds Storage
+gpc_class_88_5_368,88,0500,Lubricants/Protective Compounds Variety Packs
+gpc_class_89_1_369,89,0100,Invertebrates
+gpc_class_89_2_370,89,0200,Vertebrates
+gpc_class_91_1_371,91,0100,Alarm Systems
+gpc_class_91_2_372,91,0200,Door/Window/Perimeter Security Products
+gpc_class_91_3_373,91,0300,Home/Business Fire Extinguishers
+gpc_class_91_4_374,91,0400,Home/Business Surveillance Equipment
+gpc_class_91_5_375,91,0500,Safes
+gpc_class_91_6_376,91,0600,Home/Business Safety/Security/Surveillance Variety Packs
+gpc_class_91_7_377,91,0700,Crowd Control
+gpc_class_91_9_378,91,0900,Security Devices
+gpc_class_92_1_379,92,0100,Bulk Freight Containers (Empty)
+gpc_class_92_3_380,92,0300,Storage Barrels/Drums (Empty)
+gpc_class_93_1_381,93,0100,Aechmea - Live Plants
+gpc_class_93_2_382,93,0200,Abies (Fir)
+gpc_class_93_3_383,93,0300,Agapanthus - Live Plants
+gpc_class_93_4_384,93,0400,Alocasia - Live Plants
+gpc_class_93_5_385,93,0500,Aloe - Live Plants
+gpc_class_93_6_386,93,0600,Alstroemeria - Live Plants
+gpc_class_93_7_387,93,0700,Anemone - Live Plants
+gpc_class_93_8_388,93,0800,Angelonia - Live Plants
+gpc_class_93_9_389,93,0900,Anisodontea - Live Plants
+gpc_class_93_1_390,93,1000,Anthurium - Live Plants
+gpc_class_93_11_391,93,1100,Antirrhinum - Live Plants
+gpc_class_93_12_392,93,1200,Argyranthemum - Live Plants
+gpc_class_93_13_393,93,1300,Armeria - Live Plants
+gpc_class_93_14_394,93,1400,Aster - Live Plants
+gpc_class_93_15_395,93,1500,Astilbe - Live Plants
+gpc_class_93_16_396,93,1600,Aubrieta - Live Plants
+gpc_class_93_17_397,93,1700,Begonia - Live Plants
+gpc_class_93_18_398,93,1800,Bellis - Live Plants
+gpc_class_93_19_399,93,1900,Bidens - Live Plants
+gpc_class_93_2_400,93,2000,Bougainvillea - Live Plants
+gpc_class_93_21_401,93,2100,Brachyscome - Live Plants
+gpc_class_93_22_402,93,2200,Brassica - Live Plants
+gpc_class_93_23_403,93,2300,Bromelia - Live Plants
+gpc_class_93_24_404,93,2400,Brugmansia - Live Plants
+gpc_class_93_25_405,93,2500,Calathea - Live Plants
+gpc_class_93_26_406,93,2600,Calibrachoa - Live Plants
+gpc_class_93_27_407,93,2700,Calocephalus - Live Plants
+gpc_class_93_28_408,93,2800,Campanula - Live Plants
+gpc_class_93_29_409,93,2900,Canna - Live Plants
+gpc_class_93_3_410,93,3000,Celosia - Live Plants
+gpc_class_93_31_411,93,3100,Chamaedorea - Live Plants
+gpc_class_93_32_412,93,3200,Chlorophytum - Live Plants
+gpc_class_93_33_413,93,3300,Chrysanthemum - Live Plants
+gpc_class_93_34_414,93,3400,Clivia - Live Plants
+gpc_class_93_35_415,93,3500,Cocos - Live Plants
+gpc_class_93_36_416,93,3600,Codiaeum - Live Plants
+gpc_class_93_37_417,93,3700,Cordyline - Live Plants
+gpc_class_93_38_418,93,3800,Coreopsis - Live Plants
+gpc_class_93_39_419,93,3900,Cortaderia - Live Plants
+gpc_class_93_4_420,93,4000,Cosmos - Live Plants
+gpc_class_93_41_421,93,4100,Cuphea - Live Plants
+gpc_class_93_42_422,93,4200,Cupressus - Live Plants
+gpc_class_93_43_423,93,4300,Curcuma - Live Plants
+gpc_class_93_44_424,93,4400,Cycas - Live Plants
+gpc_class_93_45_425,93,4500,Cyclamen - Live Plants
+gpc_class_93_46_426,93,4600,Cymbidium - Live Plants
+gpc_class_93_47_427,93,4700,Cyperus - Live Plants
+gpc_class_93_48_428,93,4800,Dahlia - Live Plants
+gpc_class_93_49_429,93,4900,Delphinium - Live Plants
+gpc_class_93_5_430,93,5000,Dendrobium - Live Plants
+gpc_class_93_51_431,93,5100,Dianthus - Live Plants
+gpc_class_93_52_432,93,5200,Dicentra - Live Plants
+gpc_class_93_53_433,93,5300,Dieffenbachia - Live Plants
+gpc_class_93_54_434,93,5400,Dorotheanthus - Live Plants
+gpc_class_93_55_435,93,5500,Dracaena - Live Plants
+gpc_class_93_56_436,93,5600,Dypsis - Live Plants
+gpc_class_93_57_437,93,5700,Echeveria - Live Plants
+gpc_class_93_58_438,93,5800,Echinacea - Live Plants
+gpc_class_93_59_439,93,5900,Epipremnum - Live Plants
+gpc_class_93_6_440,93,6000,Euphorbia - Live Plants
+gpc_class_93_61_441,93,6100,Euryops - Live Plants
+gpc_class_93_62_442,93,6200,Fargesia - Live Plants
+gpc_class_93_63_443,93,6300,Felicia - Live Plants
+gpc_class_93_64_444,93,6400,Festuca - Live Plants
+gpc_class_93_65_445,93,6500,Fittonia - Live Plants
+gpc_class_93_66_446,93,6600,Fuchsia - Live Plants
+gpc_class_93_67_447,93,6700,Gardenia - Live Plants
+gpc_class_93_68_448,93,6800,Gaura - Live Plants
+gpc_class_93_69_449,93,6900,Gazania - Live Plants
+gpc_class_93_7_450,93,7000,Gentiana - Live Plants
+gpc_class_93_71_451,93,7100,Gerbera - Live Plants
+gpc_class_93_72_452,93,7200,Guzmania - Live Plants
+gpc_class_93_73_453,93,7300,Gypsophila - Live Plants
+gpc_class_93_74_454,93,7400,Ficus - Live Plants
+gpc_class_93_75_455,93,7500,Tagetes - Live Plants
+gpc_class_93_76_456,93,7600,Castanospermum - Live Plants
+gpc_class_93_77_457,93,7700,Coffea - Live Plants
+gpc_class_93_78_458,93,7800,Dionaea - Live Plants
+gpc_class_93_79_459,93,7900,Verbena - Live Plants
+gpc_class_93_8_460,93,8000,Viola - Live Plants
+gpc_class_93_81_461,93,8100,Vriesea - Live Plants
+gpc_class_93_82_462,93,8200,XBurrageara - Live Plants
+gpc_class_93_83_463,93,8300,XCitrofortunella - Live Plants
+gpc_class_93_84_464,93,8400,Yucca - Live Plants
+gpc_class_93_85_465,93,8500,Zamioculcas - Live Plants
+gpc_class_93_86_466,93,8600,Zantedeschia - Live Plants
+gpc_class_93_87_467,93,8700,Ludwigia - Live Plants
+gpc_class_93_88_468,93,8800,Musa - Live Plants
+gpc_class_93_89_469,93,8900,Peperomia - Live Plants
+gpc_class_93_9_470,93,9000,Pilea - Live Plants
+gpc_class_93_91_471,93,9100,Philodendron - Live Plants
+gpc_class_93_92_472,93,9200,Polyscias - Live Plants
+gpc_class_93_93_473,93,9300,Rhapis - Live Plants
+gpc_class_94_1_474,94,0100,Crops for natural fibre and resins production (Fibre crops)
+gpc_class_94_2_475,94,0200,Crops for latex production (Latex crops)
+gpc_class_94_3_476,94,0300,Crops for production of natural pigments/resins and waxes
+gpc_class_94_4_477,94,0400,Edible Bulb Crops
+gpc_class_94_5_478,94,0500,Crops for Production of Berries and Small Fruit
+gpc_class_94_6_479,94,0600,Crops for Production of Citrus and Other Rutaceae Fruits
+gpc_class_94_7_480,94,0700,Crops for Production of Stonefruits
+gpc_class_94_8_481,94,0800,Crops for Production of Edible Cactusfruits
+gpc_class_94_9_482,94,0900,Crops for Production of Edible Fruit from Palmtrees
+gpc_class_94_1_483,94,1000,Crops for Production of Edible Myrtletree Fruits
+gpc_class_94_11_484,94,1100,Crops for Production of Edible Sumacfruits
+gpc_class_94_12_485,94,1200,Crops for Production of Edible Fruits from Soapberrytrees
+gpc_class_94_13_486,94,1300,Crops for Production of Edible Fruit from Sapote trees
+gpc_class_94_14_487,94,1400,Crops for Production of Edible Fruit from Phyllantaceae trees
+gpc_class_94_15_488,94,1500,Crops for Production of Edible Fruit from Other Trees and Plants
+gpc_class_94_16_489,94,1600,Crops for Production of Edible Nuts
+gpc_class_94_17_490,94,1700,Crops for Production of Edible Groundnuts
+gpc_class_94_18_491,94,1800,Crops for Beverages
+gpc_class_94_19_492,94,1900,Cereals and Grains Crops
+gpc_class_94_2_493,94,2000,Sugar Crops
+gpc_class_94_21_494,94,2100,Vegetable Oil-seed Crops
+gpc_class_94_22_495,94,2200,Brassica Vegetables (Cabbage Type)
+gpc_class_94_23_496,94,2300,Edible Legume Crops
+gpc_class_94_24_497,94,2400,Stem Vegetables
+gpc_class_94_25_498,94,2500,Vegetable Crops - Edible roots/Tubers and Rhizomes
+gpc_class_94_26_499,94,2600,Edible Funghi
+gpc_class_94_27_500,94,2700,Fruiting Vegetable Crops - Solanaceae
+gpc_class_94_28_501,94,2800,Fruiting Vegetable Crops - Squash And Gourds
+gpc_class_94_29_502,94,2900,Fruiting Vegetables - Other
+gpc_class_94_3_503,94,3000,Leaf Vegetable Crops - Cichoryplants
+gpc_class_94_31_504,94,3100,Leaf Vegetable Crops - Lettuceplants
+gpc_class_94_32_505,94,3200,Leaf Vegetable Crops - Brassicaceae
+gpc_class_94_33_506,94,3300,Leaf Vegetable Crops - Spinachtype
+gpc_class_94_34_507,94,3400,Leaf Vegetable Crops - Other
+gpc_class_94_35_508,94,3500,Edible Herbs
+gpc_class_94_36_509,94,3600,Edible Spices
+gpc_class_95_1_510,95,0100,Accounting Services
+gpc_class_95_2_511,95,0200,Advertising Services
+gpc_class_95_3_512,95,0300,Architectural and Engineering Services
+gpc_class_95_4_513,95,0400,Business Management & Consulting Services
+gpc_class_95_5_514,95,0500,Computer and Technology Services
+gpc_class_95_6_515,95,0600,Legal Services
+gpc_class_96_1_516,96,0100,Currency/Certificates
+gpc_class_96_2_517,96,0200,PrePaid Cards/Gift Cards/Vouchers
+gpc_class_98_1_518,98,0100,Raw Material (Formed)
+gpc_class_98_2_519,98,0200,Recycled/Renewable Material
+gpc_class_98_3_520,98,0300,Waste Material (Formed)
+gpc_class_99_1_521,99,0100,Burial Products
+gpc_class_99_2_522,99,0200,Cemetery Products
