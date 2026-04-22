@@ -1,0 +1,46 @@
+id,code,name
+gpc_seg_10,10,Pet Care/Food
+gpc_seg_11,11,Industrial Fluid Pumps/Systems
+gpc_seg_12,12,Tobacco/Cannabis
+gpc_seg_13,13,Pest/Plant Control Products
+gpc_seg_14,14,Lighting
+gpc_seg_47,47,Cleaning/Hygiene Products
+gpc_seg_50,50,Food/Beverage
+gpc_seg_51,51,Healthcare
+gpc_seg_53,53,Beauty/Personal Care/Hygiene
+gpc_seg_58,58,Cross Segment
+gpc_seg_60,60,Textual/Printed/Reference Materials
+gpc_seg_61,61,Music
+gpc_seg_62,62,Stationery/Office Machinery/Occasion Supplies
+gpc_seg_63,63,Footwear
+gpc_seg_64,64,Personal Accessories
+gpc_seg_65,65,Computing
+gpc_seg_66,66,Communications
+gpc_seg_67,67,Clothing
+gpc_seg_68,68,Audio Visual/Photography
+gpc_seg_70,70,Arts/Crafts/Needlework
+gpc_seg_71,71,Sports Equipment
+gpc_seg_72,72,Home Appliances
+gpc_seg_73,73,Kitchenware and Tableware
+gpc_seg_74,74,Camping
+gpc_seg_75,75,Household/Office Furniture/Furnishings
+gpc_seg_77,77,Vehicle
+gpc_seg_78,78,Electrical Supplies
+gpc_seg_79,79,Plumbing/Heating/Ventilation/Air Conditioning
+gpc_seg_80,80,Tools/Equipment
+gpc_seg_81,81,Lawn/Garden Supplies
+gpc_seg_83,83,Building Products
+gpc_seg_84,84,Tool Storage/Workshop Aids
+gpc_seg_85,85,Safety/Protection - DIY
+gpc_seg_86,86,Toys/Games
+gpc_seg_87,87,Fluids/Fuels/Gases
+gpc_seg_88,88,Lubricants
+gpc_seg_89,89,Live Animals
+gpc_seg_91,91,Safety/Security/Surveillance
+gpc_seg_92,92,Storage/Haulage Containers
+gpc_seg_93,93,Horticulture Plants
+gpc_seg_94,94,Crops
+gpc_seg_95,95,Services/Vending Machines
+gpc_seg_96,96,Monetary Assets
+gpc_seg_98,98,Raw Materials (Non Food)
+gpc_seg_99,99,Postmortem Products

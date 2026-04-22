@@ -6,8 +6,10 @@
     'depends': ['base'],
     'data': [
         'security/ir.model.access.csv',
-        'views/gpc_class_views.xml',
+        'data/gpc.segment.csv',
         'data/gpc.class.csv',
+        'views/gpc_segment_views.xml',
+        'views/gpc_class_views.xml',
     ],
     'installable': True,
     'auto_install': False,

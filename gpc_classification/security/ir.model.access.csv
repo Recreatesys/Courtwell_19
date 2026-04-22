@@ -1,3 +1,5 @@
 id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
 access_gpc_class_user,gpc.class user,model_gpc_class,base.group_user,1,0,0,0
 access_gpc_class_manager,gpc.class manager,model_gpc_class,base.group_system,1,1,1,1
+access_gpc_segment_user,gpc.segment user,model_gpc_segment,base.group_user,1,0,0,0
+access_gpc_segment_manager,gpc.segment manager,model_gpc_segment,base.group_system,1,1,1,1

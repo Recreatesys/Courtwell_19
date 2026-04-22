@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- List View -->
+    <record id="gpc_segment_view_list" model="ir.ui.view">
+        <field name="name">gpc.segment.list</field>
+        <field name="model">gpc.segment</field>
+        <field name="arch" type="xml">
+            <list string="GS1 GPC Segments" default_order="code">
+                <field name="code"/>
+                <field name="name"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- Form View -->
+    <record id="gpc_segment_view_form" model="ir.ui.view">
+        <field name="name">gpc.segment.form</field>
+        <field name="model">gpc.segment</field>
+        <field name="arch" type="xml">
+            <form string="GS1 GPC Segment">
+                <sheet>
+                    <group>
+                        <field name="code"/>
+                        <field name="name"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- Action -->
+    <record id="gpc_segment_action" model="ir.actions.act_window">
+        <field name="name">GS1 GPC Segments</field>
+        <field name="res_model">gpc.segment</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <!-- Menu -->
+    <menuitem
+        id="menu_gpc_segments"
+        name="GS1 GPC Segments"
+        parent="menu_gpc_root"
+        action="gpc_segment_action"
+        sequence="5"
+    />
+
+</odoo>
