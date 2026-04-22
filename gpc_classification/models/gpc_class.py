@@ -58,7 +58,7 @@ class GpcClass(models.Model):
     _name = 'gpc.class'
     _description = 'GS1 GPC Class'
     _order = 'segment_code, code'
-    _rec_name = 'display_name'
+    _rec_name = 'description'
 
     code = fields.Char(
         string='Class Code',
@@ -81,11 +81,6 @@ class GpcClass(models.Model):
         compute='_compute_segment_label',
         store=True,
     )
-    display_name = fields.Char(
-        string='Display Name',
-        compute='_compute_display_name',
-        store=True,
-    )
 
     _sql_constraints = [
         (
@@ -95,12 +90,11 @@ class GpcClass(models.Model):
         ),
     ]
 
+    def _compute_display_name(self):
+        for rec in self:
+            rec.display_name = f'[{rec.segment_code}-{rec.code}] {rec.description}' if rec.code else rec.description
+
     @api.depends('segment_code')
     def _compute_segment_label(self):
         for rec in self:
             rec.segment_label = GPC_SEGMENT_DICT.get(rec.segment_code, '')
-
-    @api.depends('code', 'description', 'segment_code')
-    def _compute_display_name(self):
-        for rec in self:
-            rec.display_name = f'[{rec.segment_code}-{rec.code}] {rec.description}' if rec.code else rec.description

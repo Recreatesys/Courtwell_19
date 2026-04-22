@@ -45,23 +45,23 @@
             <search string="Search GPC Classes">
                 <field name="description"/>
                 <field name="code"/>
-                <separator/>
-                <filter name="filter_segment_10" string="Pet Care/Food" domain="[('segment_code','=','10')]"/>
-                <filter name="filter_segment_47" string="Cleaning/Hygiene" domain="[('segment_code','=','47')]"/>
                 <filter name="filter_segment_50" string="Food/Beverage" domain="[('segment_code','=','50')]"/>
-                <filter name="filter_segment_51" string="Healthcare" domain="[('segment_code','=','51')]"/>
-                <filter name="filter_segment_53" string="Beauty/Personal Care" domain="[('segment_code','=','53')]"/>
-                <filter name="filter_segment_65" string="Computing" domain="[('segment_code','=','65')]"/>
-                <filter name="filter_segment_67" string="Clothing" domain="[('segment_code','=','67')]"/>
                 <filter name="filter_segment_70" string="Arts/Crafts/Needlework" domain="[('segment_code','=','70')]"/>
-                <filter name="filter_segment_72" string="Home Appliances" domain="[('segment_code','=','72')]"/>
-                <filter name="filter_segment_75" string="Furniture/Furnishings" domain="[('segment_code','=','75')]"/>
-                <filter name="filter_segment_78" string="Electrical Supplies" domain="[('segment_code','=','78')]"/>
-                <filter name="filter_segment_80" string="Tools/Equipment" domain="[('segment_code','=','80')]"/>
                 <filter name="filter_segment_83" string="Building Products" domain="[('segment_code','=','83')]"/>
+                <filter name="filter_segment_78" string="Electrical Supplies" domain="[('segment_code','=','78')]"/>
+                <filter name="filter_segment_72" string="Home Appliances" domain="[('segment_code','=','72')]"/>
+                <filter name="filter_segment_80" string="Tools/Equipment" domain="[('segment_code','=','80')]"/>
+                <filter name="filter_segment_67" string="Clothing" domain="[('segment_code','=','67')]"/>
                 <filter name="filter_segment_86" string="Toys/Games" domain="[('segment_code','=','86')]"/>
-                <separator/>
-                <filter name="group_segment" string="Group by Segment" context="{'group_by': 'segment_code'}"/>
+                <filter name="filter_segment_53" string="Beauty/Personal Care" domain="[('segment_code','=','53')]"/>
+                <filter name="filter_segment_47" string="Cleaning/Hygiene" domain="[('segment_code','=','47')]"/>
+                <filter name="filter_segment_51" string="Healthcare" domain="[('segment_code','=','51')]"/>
+                <filter name="filter_segment_65" string="Computing" domain="[('segment_code','=','65')]"/>
+                <filter name="filter_segment_75" string="Furniture/Furnishings" domain="[('segment_code','=','75')]"/>
+                <filter name="filter_segment_10" string="Pet Care/Food" domain="[('segment_code','=','10')]"/>
+                <group expand="0" string="Group By">
+                    <filter name="group_segment" string="Segment" context="{'group_by': 'segment_code'}"/>
+                </group>
             </search>
         </field>
     </record>
