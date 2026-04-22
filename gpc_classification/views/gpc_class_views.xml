@@ -45,7 +45,7 @@
             <search string="Search GPC Classes">
                 <field name="description"/>
                 <field name="code"/>
-                <field name="segment_code"/>
+                <field name="segment_label"/>
                 <filter name="filter_segment_10" string="Pet Care/Food" domain="[('segment_code','=','10')]"/>
                 <filter name="filter_segment_47" string="Cleaning/Hygiene" domain="[('segment_code','=','47')]"/>
                 <filter name="filter_segment_50" string="Food/Beverage" domain="[('segment_code','=','50')]"/>
