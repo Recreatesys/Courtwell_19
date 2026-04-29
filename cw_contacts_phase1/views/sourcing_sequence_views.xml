@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- =========================================================== -->
+    <!-- sourcing.client.sequence                                     -->
+    <!-- =========================================================== -->
+    <record id="view_sourcing_client_sequence_tree" model="ir.ui.view">
+        <field name="name">sourcing.client.sequence.tree</field>
+        <field name="model">sourcing.client.sequence</field>
+        <field name="arch" type="xml">
+            <list string="Client Sequence Counters" editable="bottom">
+                <field name="partner_id"/>
+                <field name="gpc_segment"/>
+                <field name="count"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_sourcing_client_sequence_form" model="ir.ui.view">
+        <field name="name">sourcing.client.sequence.form</field>
+        <field name="model">sourcing.client.sequence</field>
+        <field name="arch" type="xml">
+            <form>
+                <sheet>
+                    <group>
+                        <field name="partner_id"/>
+                        <field name="gpc_segment"/>
+                        <field name="count"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_sourcing_client_sequence" model="ir.actions.act_window">
+        <field name="name">Client Sequence Counters</field>
+        <field name="res_model">sourcing.client.sequence</field>
+        <field name="view_mode">list,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">No counters yet</p>
+            <p>Counters are created/updated when client-side reference IDs are generated.</p>
+        </field>
+    </record>
+
+    <!-- =========================================================== -->
+    <!-- sourcing.supplier.sequence                                   -->
+    <!-- =========================================================== -->
+    <record id="view_sourcing_supplier_sequence_tree" model="ir.ui.view">
+        <field name="name">sourcing.supplier.sequence.tree</field>
+        <field name="model">sourcing.supplier.sequence</field>
+        <field name="arch" type="xml">
+            <list string="Supplier Sequence Counters" editable="bottom">
+                <field name="province_code"/>
+                <field name="gpc_segment"/>
+                <field name="count"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_sourcing_supplier_sequence_form" model="ir.ui.view">
+        <field name="name">sourcing.supplier.sequence.form</field>
+        <field name="model">sourcing.supplier.sequence</field>
+        <field name="arch" type="xml">
+            <form>
+                <sheet>
+                    <group>
+                        <field name="province_code"/>
+                        <field name="gpc_segment"/>
+                        <field name="count"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_sourcing_supplier_sequence" model="ir.actions.act_window">
+        <field name="name">Supplier Sequence Counters</field>
+        <field name="res_model">sourcing.supplier.sequence</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <!-- =========================================================== -->
+    <!-- Menu                                                          -->
+    <!-- =========================================================== -->
+    <menuitem id="menu_cw_root"
+              name="CW Sourcing"
+              sequence="80"/>
+
+    <menuitem id="menu_cw_sequences"
+              name="Sequence Counters"
+              parent="menu_cw_root"
+              sequence="20"/>
+
+    <menuitem id="menu_sourcing_client_sequence"
+              name="Client Counters"
+              parent="menu_cw_sequences"
+              action="action_sourcing_client_sequence"
+              sequence="10"/>
+
+    <menuitem id="menu_sourcing_supplier_sequence"
+              name="Supplier Counters"
+              parent="menu_cw_sequences"
+              action="action_sourcing_supplier_sequence"
+              sequence="20"/>
+
+</odoo>

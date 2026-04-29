@@ -1,0 +1,146 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo noupdate="1">
+
+    <!--
+        Phase 1 — §6 / §7 tag-model seed values.
+        noupdate="1" so admins can rename / add / deactivate without losing
+        changes on module update.
+    -->
+
+    <!-- ===== Payment Terms Accepted (§6 — Supplier) ===== -->
+    <record id="pt_tt_5050" model="cw.payment.term.tag">
+        <field name="name">TT 50/50 deposit-balance</field>
+        <field name="sequence">10</field>
+    </record>
+    <record id="pt_tt_100_upfront" model="cw.payment.term.tag">
+        <field name="name">TT 100% upfront</field>
+        <field name="sequence">20</field>
+    </record>
+    <record id="pt_30_day_credit" model="cw.payment.term.tag">
+        <field name="name">30-day credit</field>
+        <field name="sequence">30</field>
+    </record>
+    <record id="pt_other" model="cw.payment.term.tag">
+        <field name="name">Other</field>
+        <field name="sequence">99</field>
+    </record>
+
+    <!-- ===== Supplier Certifications (§6) ===== -->
+    <record id="cert_iso_9001" model="cw.supplier.certification">
+        <field name="name">ISO 9001</field>
+        <field name="sequence">10</field>
+    </record>
+    <record id="cert_ce" model="cw.supplier.certification">
+        <field name="name">CE</field>
+        <field name="sequence">20</field>
+    </record>
+    <record id="cert_rohs" model="cw.supplier.certification">
+        <field name="name">RoHS</field>
+        <field name="sequence">30</field>
+    </record>
+    <record id="cert_sgs" model="cw.supplier.certification">
+        <field name="name">SGS Approved</field>
+        <field name="sequence">40</field>
+    </record>
+    <record id="cert_bureau_veritas" model="cw.supplier.certification">
+        <field name="name">Bureau Veritas</field>
+        <field name="sequence">50</field>
+    </record>
+    <record id="cert_intertek" model="cw.supplier.certification">
+        <field name="name">Intertek</field>
+        <field name="sequence">60</field>
+    </record>
+    <record id="cert_reach" model="cw.supplier.certification">
+        <field name="name">REACH</field>
+        <field name="sequence">70</field>
+    </record>
+    <record id="cert_other" model="cw.supplier.certification">
+        <field name="name">Other</field>
+        <field name="sequence">99</field>
+    </record>
+
+    <!-- ===== Service Provider — Coverage Markets (§7) ===== -->
+    <record id="cm_hong_kong" model="cw.coverage.market">
+        <field name="name">Hong Kong</field>
+        <field name="sequence">10</field>
+    </record>
+    <record id="cm_mainland_china" model="cw.coverage.market">
+        <field name="name">Mainland China</field>
+        <field name="sequence">20</field>
+    </record>
+    <record id="cm_southeast_asia" model="cw.coverage.market">
+        <field name="name">Southeast Asia</field>
+        <field name="sequence">30</field>
+    </record>
+    <record id="cm_middle_east" model="cw.coverage.market">
+        <field name="name">Middle East</field>
+        <field name="sequence">40</field>
+    </record>
+    <record id="cm_africa" model="cw.coverage.market">
+        <field name="name">Africa</field>
+        <field name="sequence">50</field>
+    </record>
+    <record id="cm_europe" model="cw.coverage.market">
+        <field name="name">Europe</field>
+        <field name="sequence">60</field>
+    </record>
+    <record id="cm_americas" model="cw.coverage.market">
+        <field name="name">Americas</field>
+        <field name="sequence">70</field>
+    </record>
+    <record id="cm_other" model="cw.coverage.market">
+        <field name="name">Other</field>
+        <field name="sequence">99</field>
+    </record>
+
+    <!-- ===== Service Provider — Services Offered (§7) ===== -->
+    <record id="svc_sea_fcl" model="cw.service.offered">
+        <field name="name">Sea FCL</field>
+        <field name="sequence">10</field>
+    </record>
+    <record id="svc_sea_lcl" model="cw.service.offered">
+        <field name="name">Sea LCL</field>
+        <field name="sequence">20</field>
+    </record>
+    <record id="svc_air_freight" model="cw.service.offered">
+        <field name="name">Air Freight</field>
+        <field name="sequence">30</field>
+    </record>
+    <record id="svc_road_freight" model="cw.service.offered">
+        <field name="name">Road Freight</field>
+        <field name="sequence">40</field>
+    </record>
+    <record id="svc_psi" model="cw.service.offered">
+        <field name="name">Pre-Shipment Inspection</field>
+        <field name="sequence">50</field>
+    </record>
+    <record id="svc_dupro" model="cw.service.offered">
+        <field name="name">During-Production Inspection</field>
+        <field name="sequence">60</field>
+    </record>
+    <record id="svc_factory_audit" model="cw.service.offered">
+        <field name="name">Factory Audit</field>
+        <field name="sequence">70</field>
+    </record>
+    <record id="svc_loading_supervision" model="cw.service.offered">
+        <field name="name">Loading Supervision</field>
+        <field name="sequence">80</field>
+    </record>
+    <record id="svc_import_clearance" model="cw.service.offered">
+        <field name="name">Import Clearance</field>
+        <field name="sequence">90</field>
+    </record>
+    <record id="svc_export_clearance" model="cw.service.offered">
+        <field name="name">Export Clearance</field>
+        <field name="sequence">100</field>
+    </record>
+    <record id="svc_lab_testing" model="cw.service.offered">
+        <field name="name">Lab Testing</field>
+        <field name="sequence">110</field>
+    </record>
+    <record id="svc_cert_issuance" model="cw.service.offered">
+        <field name="name">Certification Issuance</field>
+        <field name="sequence">120</field>
+    </record>
+
+</odoo>

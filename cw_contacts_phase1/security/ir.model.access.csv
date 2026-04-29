@@ -1,0 +1,13 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_cw_payment_term_user,cw.payment.term.tag user,model_cw_payment_term_tag,base.group_user,1,0,0,0
+access_cw_payment_term_admin,cw.payment.term.tag admin,model_cw_payment_term_tag,base.group_system,1,1,1,1
+access_cw_supplier_cert_user,cw.supplier.certification user,model_cw_supplier_certification,base.group_user,1,0,0,0
+access_cw_supplier_cert_admin,cw.supplier.certification admin,model_cw_supplier_certification,base.group_system,1,1,1,1
+access_cw_coverage_market_user,cw.coverage.market user,model_cw_coverage_market,base.group_user,1,0,0,0
+access_cw_coverage_market_admin,cw.coverage.market admin,model_cw_coverage_market,base.group_system,1,1,1,1
+access_cw_service_offered_user,cw.service.offered user,model_cw_service_offered,base.group_user,1,0,0,0
+access_cw_service_offered_admin,cw.service.offered admin,model_cw_service_offered,base.group_system,1,1,1,1
+access_sourcing_client_seq_user,sourcing.client.sequence user,model_sourcing_client_sequence,base.group_user,1,0,0,0
+access_sourcing_client_seq_admin,sourcing.client.sequence admin,model_sourcing_client_sequence,base.group_system,1,1,1,1
+access_sourcing_supplier_seq_user,sourcing.supplier.sequence user,model_sourcing_supplier_sequence,base.group_user,1,0,0,0
+access_sourcing_supplier_seq_admin,sourcing.supplier.sequence admin,model_sourcing_supplier_sequence,base.group_system,1,1,1,1

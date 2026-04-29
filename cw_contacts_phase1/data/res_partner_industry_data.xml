@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo noupdate="1">
+
+    <!--
+        Phase 1 — §5 Industries Served seed values.
+        Used by the custom Many2many `industries_served_ids` on res.partner.
+        These are also visible in Odoo's native Industry M2O selection.
+        noupdate="1" so admins can rename / extend without being overwritten
+        on module updates.
+    -->
+
+    <record id="ind_retail" model="res.partner.industry">
+        <field name="name">Retail</field>
+    </record>
+    <record id="ind_hospitality" model="res.partner.industry">
+        <field name="name">Hospitality</field>
+    </record>
+    <record id="ind_fnb" model="res.partner.industry">
+        <field name="name">F&amp;B</field>
+    </record>
+    <record id="ind_property_dev" model="res.partner.industry">
+        <field name="name">Property Development</field>
+    </record>
+    <record id="ind_construction" model="res.partner.industry">
+        <field name="name">Construction</field>
+    </record>
+    <record id="ind_events" model="res.partner.industry">
+        <field name="name">Events</field>
+    </record>
+    <record id="ind_manufacturing" model="res.partner.industry">
+        <field name="name">Manufacturing</field>
+    </record>
+    <record id="ind_wholesale" model="res.partner.industry">
+        <field name="name">Wholesale</field>
+    </record>
+    <record id="ind_other" model="res.partner.industry">
+        <field name="name">Other</field>
+    </record>
+
+</odoo>

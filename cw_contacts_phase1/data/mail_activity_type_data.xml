@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo noupdate="1">
+
+    <!--
+        Phase 1 — §9 Custom Activity Types
+        Default deadlines per spec. No auto-creation triggers configured here;
+        triggers (e.g. Quotation Follow-up auto-created on stage entry) are
+        deferred system rules, out of scope for this module.
+
+        delay_count + delay_unit + delay_from defines the default deadline.
+        Where the spec says "None — log immediately", delay_count is 0.
+    -->
+
+    <record id="cw_act_inquiry_received" model="mail.activity.type">
+        <field name="name">Inquiry Received</field>
+        <field name="summary">Inquiry received from client — log immediately</field>
+        <field name="delay_count">0</field>
+        <field name="delay_unit">days</field>
+        <field name="delay_from">current_date</field>
+        <field name="icon">fa-inbox</field>
+        <field name="res_model">crm.lead</field>
+    </record>
+
+    <record id="cw_act_supplier_outreach" model="mail.activity.type">
+        <field name="name">Supplier Outreach</field>
+        <field name="summary">Contact supplier for quote / sample / info</field>
+        <field name="delay_count">3</field>
+        <field name="delay_unit">days</field>
+        <field name="delay_from">current_date</field>
+        <field name="icon">fa-paper-plane</field>
+    </record>
+
+    <record id="cw_act_quote_received" model="mail.activity.type">
+        <field name="name">Quote Received</field>
+        <field name="summary">Supplier quote received — log price, lead time, validity</field>
+        <field name="delay_count">0</field>
+        <field name="delay_unit">days</field>
+        <field name="delay_from">current_date</field>
+        <field name="icon">fa-file-text-o</field>
+        <field name="res_model">crm.lead</field>
+    </record>
+
+    <record id="cw_act_sample_requested" model="mail.activity.type">
+        <field name="name">Sample Requested</field>
+        <field name="summary">Sample requested from supplier — log courier tracking</field>
+        <field name="delay_count">14</field>
+        <field name="delay_unit">days</field>
+        <field name="delay_from">current_date</field>
+        <field name="icon">fa-cube</field>
+    </record>
+
+    <record id="cw_act_sample_assessment" model="mail.activity.type">
+        <field name="name">Sample Assessment</field>
+        <field name="summary">Sample reviewed — record outcome and observations</field>
+        <field name="delay_count">0</field>
+        <field name="delay_unit">days</field>
+        <field name="delay_from">current_date</field>
+        <field name="icon">fa-check-square-o</field>
+        <field name="res_model">crm.lead</field>
+    </record>
+
+    <record id="cw_act_quotation_followup" model="mail.activity.type">
+        <field name="name">Quotation Follow-up</field>
+        <field name="summary">Follow up on issued client quotation</field>
+        <field name="delay_count">5</field>
+        <field name="delay_unit">days</field>
+        <field name="delay_from">current_date</field>
+        <field name="icon">fa-bell-o</field>
+        <field name="res_model">crm.lead</field>
+    </record>
+
+    <record id="cw_act_client_meeting" model="mail.activity.type">
+        <field name="name">Client Meeting</field>
+        <field name="summary">Scheduled meeting with client — syncs to Outlook calendar</field>
+        <field name="delay_count">0</field>
+        <field name="delay_unit">days</field>
+        <field name="delay_from">current_date</field>
+        <field name="icon">fa-users</field>
+        <field name="category">meeting</field>
+    </record>
+
+    <record id="cw_act_supplier_visit" model="mail.activity.type">
+        <field name="name">Supplier Visit / Factory Audit</field>
+        <field name="summary">On-site supplier visit or factory audit</field>
+        <field name="delay_count">0</field>
+        <field name="delay_unit">days</field>
+        <field name="delay_from">current_date</field>
+        <field name="icon">fa-industry</field>
+        <field name="category">meeting</field>
+    </record>
+
+    <record id="cw_act_document_request" model="mail.activity.type">
+        <field name="name">Document Request</field>
+        <field name="summary">Request for certificates, compliance docs, packing lists, LC docs</field>
+        <field name="delay_count">7</field>
+        <field name="delay_unit">days</field>
+        <field name="delay_from">current_date</field>
+        <field name="icon">fa-file-pdf-o</field>
+    </record>
+
+</odoo>

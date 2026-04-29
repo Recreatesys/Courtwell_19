@@ -1,0 +1,196 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- =========================================================== -->
+    <!-- res.partner — Form extension                                 -->
+    <!--                                                              -->
+    <!-- Adds Contact Type / Service Provider Type at the top of the  -->
+    <!-- form, then injects three notebook tabs (Client / Supplier /  -->
+    <!-- Service Provider) whose visibility is driven by contact_type -->
+    <!-- =========================================================== -->
+    <record id="view_partner_form_cw_phase1" model="ir.ui.view">
+        <field name="name">res.partner.form.cw.phase1</field>
+        <field name="model">res.partner</field>
+        <field name="inherit_id" ref="base.view_partner_form"/>
+        <field name="arch" type="xml">
+
+            <!-- Promote Contact Type and codes near the top, before the first form group -->
+            <xpath expr="//sheet/group[1]" position="before">
+                <group>
+                    <group>
+                        <field name="contact_type"/>
+                        <field name="service_provider_type"
+                               invisible="contact_type != 'service_provider'"
+                               required="contact_type == 'service_provider'"/>
+                    </group>
+                    <group>
+                        <field name="client_code"
+                               invisible="contact_type != 'client'"
+                               placeholder="GM-assigned 2 letters, e.g. AC"/>
+                        <field name="province_code"
+                               invisible="contact_type != 'supplier'"/>
+                    </group>
+                </group>
+            </xpath>
+
+            <!-- Add tabs to the existing notebook -->
+            <xpath expr="//notebook" position="inside">
+
+                <!-- ===== Client Profile tab ===== -->
+                <page string="Client Profile" name="client_profile"
+                      invisible="contact_type != 'client'">
+                    <group>
+                        <group string="Relationship">
+                            <field name="client_tier"/>
+                            <field name="relationship_since"/>
+                            <field name="primary_market_country_id"/>
+                            <field name="primary_market_code" readonly="1"/>
+                            <field name="industries_served_ids" widget="many2many_tags"/>
+                        </group>
+                        <group string="Commercial Defaults">
+                            <field name="typical_order_value"/>
+                            <field name="preferred_trade_terms_client"/>
+                            <field name="preferred_currency"/>
+                            <field name="preferred_communication"/>
+                            <field name="language_preference"/>
+                        </group>
+                    </group>
+                    <group string="GS1 GPC Interest">
+                        <field name="gs1_segments_of_interest_ids" widget="many2many_tags"/>
+                        <field name="gs1_classes_of_interest_ids" widget="many2many_tags"/>
+                    </group>
+                    <group string="Qualitative Intelligence">
+                        <field name="decision_making_notes" nolabel="1" colspan="2"
+                               placeholder="Who are the real decision-makers, how approval works, who influences the final call..."/>
+                        <field name="key_sensitivities" nolabel="1" colspan="2"
+                               placeholder="Price sensitivity, lead time, QC standards, documentation requirements, communication style..."/>
+                    </group>
+                </page>
+
+                <!-- ===== Supplier Profile tab ===== -->
+                <page string="Supplier Profile" name="supplier_profile"
+                      invisible="contact_type != 'supplier'">
+                    <group>
+                        <group string="Vetting &amp; Audit">
+                            <field name="vetting_status"/>
+                            <field name="factory_audit_completed"/>
+                            <field name="factory_audit_date"
+                                   invisible="not factory_audit_completed"/>
+                            <field name="performance_rating"/>
+                        </group>
+                        <group string="Capability">
+                            <field name="factory_location"/>
+                            <field name="moq_range"/>
+                            <field name="typical_lead_time"/>
+                            <field name="export_license_held"/>
+                            <field name="inspection_access"/>
+                        </group>
+                    </group>
+                    <group string="GS1 GPC Coverage">
+                        <field name="gs1_segments_supplied_ids" widget="many2many_tags"/>
+                        <field name="gs1_classes_supplied_ids" widget="many2many_tags"/>
+                    </group>
+                    <group>
+                        <group string="Commercial">
+                            <field name="preferred_trade_terms_supplier"/>
+                            <field name="payment_terms_accepted_ids" widget="many2many_tags"/>
+                        </group>
+                        <group string="Quality &amp; Comms">
+                            <field name="certification_ids" widget="many2many_tags"/>
+                            <field name="wechat_id"/>
+                        </group>
+                    </group>
+                    <group>
+                        <field name="supplier_notes" nolabel="1" colspan="2"
+                               placeholder="What they're good at, what to watch, key contacts, historical issues, turnaround reliability..."/>
+                    </group>
+                </page>
+
+                <!-- ===== Service Provider Profile tab ===== -->
+                <page string="Service Provider Profile" name="service_provider_profile"
+                      invisible="contact_type != 'service_provider'">
+                    <group>
+                        <group>
+                            <field name="preferred_provider"/>
+                        </group>
+                    </group>
+                    <group>
+                        <field name="coverage_market_ids" widget="many2many_tags"/>
+                        <field name="services_offered_ids" widget="many2many_tags"/>
+                    </group>
+                    <group>
+                        <field name="rate_notes" nolabel="1" colspan="2"
+                               placeholder="General pricing reference, useful for budget estimation..."/>
+                        <field name="sp_performance_notes" nolabel="1" colspan="2"
+                               placeholder="Reliability, response time, communication quality, service failures..."/>
+                    </group>
+                </page>
+
+            </xpath>
+        </field>
+    </record>
+
+    <!-- =========================================================== -->
+    <!-- res.partner — List extension (show contact_type column)      -->
+    <!-- =========================================================== -->
+    <record id="view_partner_list_cw_phase1" model="ir.ui.view">
+        <field name="name">res.partner.list.cw.phase1</field>
+        <field name="model">res.partner</field>
+        <field name="inherit_id" ref="base.view_partner_tree"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='complete_name']" position="after">
+                <field name="contact_type" optional="show"/>
+                <field name="client_code" optional="hide"/>
+                <field name="province_code" optional="hide"/>
+                <field name="vetting_status" optional="hide"/>
+                <field name="client_tier" optional="hide"/>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- =========================================================== -->
+    <!-- res.partner — Search filters                                 -->
+    <!-- =========================================================== -->
+    <record id="view_partner_search_cw_phase1" model="ir.ui.view">
+        <field name="name">res.partner.search.cw.phase1</field>
+        <field name="model">res.partner</field>
+        <field name="inherit_id" ref="base.view_res_partner_filter"/>
+        <field name="arch" type="xml">
+
+            <!-- Add new search fields next to existing search fields -->
+            <xpath expr="//field[@name='user_id']" position="after">
+                <field name="client_code"/>
+                <field name="province_code"/>
+            </xpath>
+
+            <!-- Add filters before the Group By section (alongside other filters) -->
+            <xpath expr="//group[@name='group_by']" position="before">
+                <separator/>
+                <filter name="filter_clients" string="Clients"
+                        domain="[('contact_type', '=', 'client')]"/>
+                <filter name="filter_suppliers" string="Suppliers"
+                        domain="[('contact_type', '=', 'supplier')]"/>
+                <filter name="filter_service_providers" string="Service Providers"
+                        domain="[('contact_type', '=', 'service_provider')]"/>
+                <filter name="filter_internal" string="Internal"
+                        domain="[('contact_type', '=', 'internal')]"/>
+                <separator/>
+                <filter name="filter_supplier_approved" string="Approved Suppliers (T1/T2)"
+                        domain="[('contact_type', '=', 'supplier'),
+                                 ('vetting_status', 'in', ['approved_t1', 'approved_t2'])]"/>
+            </xpath>
+
+            <!-- Add group-by filters inside the existing Group By group -->
+            <xpath expr="//group[@name='group_by']" position="inside">
+                <filter name="group_contact_type" string="Contact Type"
+                        context="{'group_by': 'contact_type'}"/>
+                <filter name="group_vetting_status" string="Vetting Status"
+                        context="{'group_by': 'vetting_status'}"/>
+                <filter name="group_client_tier" string="Client Tier"
+                        context="{'group_by': 'client_tier'}"/>
+            </xpath>
+
+        </field>
+    </record>
+
+</odoo>
