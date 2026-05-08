@@ -2,7 +2,7 @@
     'name': 'CW Contacts — Phase 1',
     'version': '19.0.1.0.0',
     'summary': 'Contact Type classification, Client/Supplier/Service Provider profiles, '
-               'GS1 GPC reference models, sourcing sequences, custom activity types',
+               'custom activity types',
     'description': """
 Phase 1 — Contact Management foundation for the boutique sourcing firm.
 
@@ -12,15 +12,11 @@ Includes:
   * Supplier profile fields (province_code, vetting status, GS1 supplied, etc.)
   * Service Provider profile fields (coverage, services, preferred flag)
   * Uses GS1 GPC Segment / Class reference models from gpc_classification module
-  * Sourcing sequence models (client + supplier) — data structures only,
-    no auto-increment trigger yet
   * 8 custom mail.activity.type records — no auto-creation triggers yet
 
-NOT included in this module:
-  * CRM pipeline stage configuration
-  * Stage-exit validators / system rules
-  * Reference ID auto-generation triggers
-  * Dashboard filtering rules
+The sourcing sequence models (sourcing.client.sequence,
+sourcing.supplier.sequence) and the Reference ID auto-generation triggers
+live in the sourcing_reference module.
 """,
     'author': 'CW Internal',
     'category': 'Contacts',
@@ -34,7 +30,6 @@ NOT included in this module:
     'data': [
         'security/ir.model.access.csv',
         'views/res_partner_views.xml',
-        'views/sourcing_sequence_views.xml',
         'data/mail_activity_type_data.xml',
         'data/res_partner_industry_data.xml',
         'data/cw_tags_data.xml',

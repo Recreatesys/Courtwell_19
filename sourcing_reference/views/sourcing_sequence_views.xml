@@ -82,24 +82,24 @@
     <!-- =========================================================== -->
     <!-- Menu                                                          -->
     <!-- =========================================================== -->
-    <menuitem id="menu_cw_root"
+    <menuitem id="menu_sourcing_root"
               name="CW Sourcing"
               sequence="80"/>
 
-    <menuitem id="menu_cw_sequences"
+    <menuitem id="menu_sourcing_sequences"
               name="Sequence Counters"
-              parent="menu_cw_root"
+              parent="menu_sourcing_root"
               sequence="20"/>
 
     <menuitem id="menu_sourcing_client_sequence"
               name="Client Counters"
-              parent="menu_cw_sequences"
+              parent="menu_sourcing_sequences"
               action="action_sourcing_client_sequence"
               sequence="10"/>
 
     <menuitem id="menu_sourcing_supplier_sequence"
               name="Supplier Counters"
-              parent="menu_cw_sequences"
+              parent="menu_sourcing_sequences"
               action="action_sourcing_supplier_sequence"
               sequence="20"/>
 

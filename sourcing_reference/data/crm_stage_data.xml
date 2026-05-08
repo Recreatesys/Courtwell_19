@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo noupdate="0">
+
+    <record id="crm_stage_incoming_inquiry" model="crm.stage">
+        <field name="name">Incoming Inquiry</field>
+        <field name="sequence">1</field>
+        <field name="fold" eval="False"/>
+        <field name="is_won" eval="False"/>
+    </record>
+
+    <record id="crm_stage_sourcing" model="crm.stage">
+        <field name="name">Sourcing</field>
+        <field name="sequence">2</field>
+        <field name="fold" eval="False"/>
+        <field name="is_won" eval="False"/>
+    </record>
+
+    <record id="crm_stage_quotation" model="crm.stage">
+        <field name="name">Quotation</field>
+        <field name="sequence">3</field>
+        <field name="fold" eval="False"/>
+        <field name="is_won" eval="False"/>
+    </record>
+
+    <record id="crm_stage_proforma_invoice" model="crm.stage">
+        <field name="name">Proforma Invoice</field>
+        <field name="sequence">4</field>
+        <field name="fold" eval="False"/>
+        <field name="is_won" eval="False"/>
+    </record>
+
+    <record id="crm_stage_qc" model="crm.stage">
+        <field name="name">QC</field>
+        <field name="sequence">5</field>
+        <field name="fold" eval="False"/>
+        <field name="is_won" eval="False"/>
+    </record>
+
+    <record id="crm_stage_enroute" model="crm.stage">
+        <field name="name">Enroute</field>
+        <field name="sequence">6</field>
+        <field name="fold" eval="False"/>
+        <field name="is_won" eval="False"/>
+    </record>
+
+    <record id="crm_stage_upsell_reorder" model="crm.stage">
+        <field name="name">Upsell/Reorder</field>
+        <field name="sequence">7</field>
+        <field name="fold" eval="False"/>
+        <field name="is_won" eval="True"/>
+    </record>
+
+    <record id="crm_stage_lost" model="crm.stage">
+        <field name="name">Lost</field>
+        <field name="sequence">8</field>
+        <field name="fold" eval="True"/>
+        <field name="is_won" eval="False"/>
+    </record>
+
+    <record id="crm_stage_on_hold" model="crm.stage">
+        <field name="name">On Hold</field>
+        <field name="sequence">9</field>
+        <field name="fold" eval="True"/>
+        <field name="is_won" eval="False"/>
+    </record>
+
+</odoo>

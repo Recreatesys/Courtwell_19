@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="project_project_view_form_sourcing_ref" model="ir.ui.view">
+        <field name="name">project.project.form.sourcing.reference</field>
+        <field name="model">project.project</field>
+        <field name="inherit_id" ref="project.edit_project"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='name']" position="after">
+                <field name="sourcing_reference"
+                       readonly="1"
+                       invisible="not sourcing_reference"
+                       force_save="1"/>
+            </xpath>
+        </field>
+    </record>
+
+</odoo>

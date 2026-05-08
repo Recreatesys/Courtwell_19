@@ -1,0 +1,5 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_sourcing_client_seq_user,sourcing.client.sequence user,model_sourcing_client_sequence,base.group_user,1,0,0,0
+access_sourcing_client_seq_admin,sourcing.client.sequence admin,model_sourcing_client_sequence,base.group_system,1,1,1,1
+access_sourcing_supplier_seq_user,sourcing.supplier.sequence user,model_sourcing_supplier_sequence,base.group_user,1,0,0,0
+access_sourcing_supplier_seq_admin,sourcing.supplier.sequence admin,model_sourcing_supplier_sequence,base.group_system,1,1,1,1

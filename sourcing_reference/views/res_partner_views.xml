@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="res_partner_view_form_sourcing_smart_button" model="ir.ui.view">
+        <field name="name">res.partner.form.sourcing.smart.button</field>
+        <field name="model">res.partner</field>
+        <field name="inherit_id" ref="base.view_partner_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//div[@name='button_box']" position="inside">
+                <button class="oe_stat_button"
+                        type="object"
+                        name="action_view_sourcing_orders"
+                        icon="fa-shopping-cart"
+                        invisible="contact_type != 'client'">
+                    <field name="sourcing_orders_count" widget="statinfo" string="Orders"/>
+                </button>
+            </xpath>
+        </field>
+    </record>
+
+</odoo>
