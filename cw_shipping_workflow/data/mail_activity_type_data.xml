@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo noupdate="1">
+
+    <record id="mail_activity_type_request_spot_rates" model="mail.activity.type">
+        <field name="name">Request freight forwarder spot rates</field>
+        <field name="summary">Reach out to forwarders for spot rates and container schedule</field>
+        <field name="delay_count">3</field>
+        <field name="delay_unit">days</field>
+        <field name="res_model">cw.shipment</field>
+        <field name="category">default</field>
+        <field name="icon">fa-ship</field>
+    </record>
+
+    <record id="mail_activity_type_coordinate_packing" model="mail.activity.type">
+        <field name="name">Coordinate packing / CBM / crates</field>
+        <field name="summary">Drill into packing list, CBM, crate sizes with merchandiser and supplier</field>
+        <field name="delay_count">5</field>
+        <field name="delay_unit">days</field>
+        <field name="res_model">cw.shipment</field>
+        <field name="category">default</field>
+        <field name="icon">fa-archive</field>
+    </record>
+
+    <record id="mail_activity_type_book_shipping" model="mail.activity.type">
+        <field name="name">Book shipping plan with forwarder</field>
+        <field name="summary">Confirm container booking, vessel, ETD/ETA at least 7 days before QC</field>
+        <field name="res_model">cw.shipment</field>
+        <field name="category">default</field>
+        <field name="icon">fa-anchor</field>
+    </record>
+
+</odoo>

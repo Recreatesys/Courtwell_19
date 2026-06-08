@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="view_cw_shipment_form_workflow" model="ir.ui.view">
+        <field name="name">cw.shipment.form.workflow</field>
+        <field name="model">cw.shipment</field>
+        <field name="inherit_id" ref="cw_shipment.view_cw_shipment_form"/>
+        <field name="arch" type="xml">
+            <field name="forwarder_id" position="after">
+                <field name="opportunity_id" options="{'no_create': True}"/>
+                <field name="sale_order_id" options="{'no_create': True}"
+                       domain="[('opportunity_id', '=', opportunity_id)]"/>
+                <field name="responsible_user_id"/>
+            </field>
+            <xpath expr="//page[@name='containers']" position="after">
+                <page string="Freight Quotes" name="freight_quotes">
+                    <field name="freight_quote_ids" context="{'default_shipment_id': id}">
+                        <list editable="bottom" decoration-success="is_selected">
+                            <field name="sequence" widget="handle"/>
+                            <field name="forwarder_id"/>
+                            <field name="mode"/>
+                            <field name="container_type"/>
+                            <field name="rate"/>
+                            <field name="currency_id" options="{'no_create': True, 'no_open': True}"/>
+                            <field name="transit_days"/>
+                            <field name="quoted_on"/>
+                            <field name="valid_until"/>
+                            <field name="is_selected" widget="boolean_toggle"/>
+                        </list>
+                        <form string="Freight Quote">
+                            <sheet>
+                                <group>
+                                    <group string="Forwarder">
+                                        <field name="forwarder_id"/>
+                                        <field name="mode"/>
+                                        <field name="container_type"/>
+                                        <field name="transit_days"/>
+                                    </group>
+                                    <group string="Pricing">
+                                        <label for="rate"/>
+                                        <div class="o_row">
+                                            <field name="rate"/>
+                                            <field name="currency_id" options="{'no_create': True, 'no_open': True}"/>
+                                        </div>
+                                        <field name="quoted_on"/>
+                                        <field name="valid_until"/>
+                                        <field name="is_selected" widget="boolean_toggle"/>
+                                    </group>
+                                </group>
+                                <group>
+                                    <group string="Route">
+                                        <field name="port_of_loading_id"/>
+                                        <field name="destination_port_id"/>
+                                    </group>
+                                </group>
+                                <group string="Notes">
+                                    <field name="notes" nolabel="1" placeholder="Free-form notes about this quote..."/>
+                                </group>
+                            </sheet>
+                        </form>
+                    </field>
+                </page>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="view_cw_shipment_list_workflow" model="ir.ui.view">
+        <field name="name">cw.shipment.list.workflow</field>
+        <field name="model">cw.shipment</field>
+        <field name="inherit_id" ref="cw_shipment.view_cw_shipment_list"/>
+        <field name="arch" type="xml">
+            <field name="customer_id" position="after">
+                <field name="opportunity_id" optional="show"/>
+                <field name="sale_order_id" optional="hide"/>
+                <field name="responsible_user_id" optional="show"/>
+            </field>
+        </field>
+    </record>
+
+</odoo>

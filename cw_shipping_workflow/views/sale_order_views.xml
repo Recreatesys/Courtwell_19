@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="view_order_form_cw_deposit" model="ir.ui.view">
+        <field name="name">sale.order.form.cw.deposit</field>
+        <field name="model">sale.order</field>
+        <field name="inherit_id" ref="sale.view_order_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='payment_term_id']" position="after">
+                <field name="cw_deposit_received"
+                       groups="account.group_account_user,cw_shipping_workflow.group_shipping_user"/>
+                <field name="cw_deposit_received_date"
+                       readonly="not cw_deposit_received"
+                       invisible="not cw_deposit_received"
+                       groups="account.group_account_user,cw_shipping_workflow.group_shipping_user"/>
+                <field name="cw_deposit_confirmed_by"
+                       invisible="not cw_deposit_received"
+                       groups="account.group_account_user,cw_shipping_workflow.group_shipping_user"/>
+            </xpath>
+        </field>
+    </record>
+
+</odoo>

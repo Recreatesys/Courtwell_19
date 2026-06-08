@@ -1,0 +1,6 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_crm_lead_shipping,crm.lead shipping read,crm.model_crm_lead,cw_shipping_workflow.group_shipping_user,1,0,0,0
+access_sale_order_shipping,sale.order shipping read,sale.model_sale_order,cw_shipping_workflow.group_shipping_user,1,0,0,0
+access_crm_stage_shipping,crm.stage shipping read,crm.model_crm_stage,cw_shipping_workflow.group_shipping_user,1,0,0,0
+access_cw_freight_quote_user,cw.shipment.freight.quote user,model_cw_shipment_freight_quote,base.group_user,1,1,1,1
+access_cw_freight_quote_manager,cw.shipment.freight.quote manager,model_cw_shipment_freight_quote,base.group_system,1,1,1,1

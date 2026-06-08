@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo noupdate="0">
+
+    <record id="rule_cw_shipping_crm_lead_stage" model="ir.rule">
+        <field name="name">CW Shipping: opps from Proforma Invoice onwards</field>
+        <field name="model_id" ref="crm.model_crm_lead"/>
+        <field name="groups" eval="[(4, ref('cw_shipping_workflow.group_shipping_user'))]"/>
+        <field name="domain_force">[('stage_id.sequence', '&gt;=', 3)]</field>
+        <field name="perm_read" eval="True"/>
+        <field name="perm_write" eval="False"/>
+        <field name="perm_create" eval="False"/>
+        <field name="perm_unlink" eval="False"/>
+    </record>
+
+    <record id="rule_cw_shipping_sale_order_stage" model="ir.rule">
+        <field name="name">CW Shipping: SOs from Proforma stage onwards</field>
+        <field name="model_id" ref="sale.model_sale_order"/>
+        <field name="groups" eval="[(4, ref('cw_shipping_workflow.group_shipping_user'))]"/>
+        <field name="domain_force">['|', ('opportunity_id', '=', False), ('opportunity_id.stage_id.sequence', '&gt;=', 3)]</field>
+        <field name="perm_read" eval="True"/>
+        <field name="perm_write" eval="False"/>
+        <field name="perm_create" eval="False"/>
+        <field name="perm_unlink" eval="False"/>
+    </record>
+
+</odoo>
