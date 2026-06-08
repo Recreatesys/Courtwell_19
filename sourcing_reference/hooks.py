@@ -13,7 +13,6 @@ _logger = logging.getLogger(__name__)
 # 'Archived' is intentionally renamed to 'On Hold' to match the spec.
 NAME_TO_XMLID = {
     'incoming inquiry': 'crm_stage_incoming_inquiry',
-    'sourcing': 'crm_stage_sourcing',
     'quotation': 'crm_stage_quotation',
     'quotation sent': 'crm_stage_quotation',
     'proforma invoice': 'crm_stage_proforma_invoice',
@@ -87,7 +86,6 @@ def post_init_hook(env):
     # Build name → our_stage map
     our_xmlids = {
         'crm_stage_incoming_inquiry',
-        'crm_stage_sourcing',
         'crm_stage_quotation',
         'crm_stage_proforma_invoice',
         'crm_stage_qc',

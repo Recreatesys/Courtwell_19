@@ -18,7 +18,7 @@ class CrmLead(models.Model):
         tracking=True,
         help='Auto-generated immutable reference ID. Format: '
              'OP-{ClientCode}-{SegmentCode}-{YY}-{NNN}. '
-             'Generated on first entry to the Sourcing stage.',
+             'Generated on first entry to the Quotation stage.',
     )
 
     gpc_segment_id = fields.Many2one(
@@ -60,13 +60,13 @@ class CrmLead(models.Model):
             return True
         return (stage.name or '').strip().lower() == 'incoming inquiry'
 
-    def _is_sourcing_stage(self, stage):
+    def _is_quotation_stage(self, stage):
         if not stage:
             return False
-        target = self.env.ref('sourcing_reference.crm_stage_sourcing', raise_if_not_found=False)
+        target = self.env.ref('sourcing_reference.crm_stage_quotation', raise_if_not_found=False)
         if target and stage.id == target.id:
             return True
-        return (stage.name or '').strip().lower() == 'sourcing'
+        return (stage.name or '').strip().lower() == 'quotation'
 
     def _is_lost_stage(self, stage):
         if not stage:
@@ -93,7 +93,7 @@ class CrmLead(models.Model):
             ))
 
     def _generate_sourcing_reference(self):
-        """Generate OP-{cc}-{seg}-{YY}-{NNN} on entry to Sourcing.
+        """Generate OP-{cc}-{seg}-{YY}-{NNN} on entry to Quotation.
 
         Idempotent: if a reference already exists, returns silently.
         Concurrency-safe: uses a SELECT ... FOR UPDATE row lock on the
@@ -145,18 +145,15 @@ class CrmLead(models.Model):
                     continue
                 from_inquiry = self._is_incoming_inquiry_stage(old_stage)
                 to_lost = self._is_lost_stage(new_stage)
-                to_sourcing = self._is_sourcing_stage(new_stage)
                 if from_inquiry and not to_lost:
                     lead._validate_inquiry_exit()
-                if to_sourcing and not lead.sourcing_reference:
-                    pass
 
         result = super().write(vals)
 
         if 'stage_id' in vals and not self.env.context.get('skip_sourcing_validation'):
             for lead in self:
                 if (
-                    self._is_sourcing_stage(lead.stage_id)
+                    self._is_quotation_stage(lead.stage_id)
                     and not lead.sourcing_reference
                     and lead.partner_id
                     and lead.gpc_segment_id

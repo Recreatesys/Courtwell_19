@@ -1,6 +1,6 @@
 {
     'name': 'CW Sourcing Reference IDs',
-    'version': '19.0.1.0.0',
+    'version': '19.0.1.1.0',
     'summary': 'Auto-generated client/supplier reference IDs, sequence counters, '
                'CRM pipeline stages, and propagation across SO/PO/Project',
     'description': """
@@ -9,12 +9,12 @@ Phase 1 — Reference ID Architecture for the boutique sourcing firm.
 Implements the spec from §2 and §12.1:
   * sourcing.client.sequence  — cumulative counter per (client, GS1 segment)
   * sourcing.supplier.sequence — cumulative counter per (province, GS1 segment)
-  * crm.lead generator: OP-{ClientCode}-{Segment}-{YY}-{NNN} on Incoming Inquiry exit
+  * crm.lead generator: OP-{ClientCode}-{Segment}-{YY}-{NNN} on entry to Quotation stage
   * sale.order propagation: QP-... (read from lead)
   * purchase.order generator/propagation: RQ-{Province}-{Segment}-{YY}-{NNN}, flips to PO- on confirm
   * project.project Phase 3 hook (stub field PR-... — populated in Phase 3)
   * Client Contact smart button — Orders (non-Lost opportunity count)
-  * 9 CRM pipeline stages (Incoming Inquiry, Sourcing, Quotation, Proforma Invoice,
+  * 8 CRM pipeline stages (Incoming Inquiry, Quotation, Proforma Invoice,
     QC, Enroute, Upsell/Reorder, Lost, On Hold)
 
 Models sourcing.client.sequence and sourcing.supplier.sequence were originally
