@@ -1,6 +1,6 @@
 {
     'name': "CW Debrand & Quotation Email Cleanup",
-    'version': '19.0.1.0.0',
+    'version': '19.0.1.0.1',
     'category': 'Tools',
     'summary': "Strips Odoo branding from website, portal, emails, and "
                "backend; replaces the portal link in quotation emails with "
@@ -61,4 +61,5 @@ Notes
     'installable': True,
     'application': False,
     'auto_install': False,
+    'pre_init_hook': '_cw_debrand_clear_template_noupdate',
 }
