@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="0">
+
+        <!--
+            Default rule (applies to every internal user via base.group_user):
+
+            Restricts write and unlink on res.partner to records created by
+            the same user. Read and create are not touched here:
+
+            * Read remains broad (granted via base.group_user's default ACL
+              and unrestricted by rule). Required for partner Many2one
+              fields to render across the ERP — invoices, sale orders,
+              picking, etc.
+
+            * Create stays open via ir.model.access.csv so restricted users
+              can add new contacts from the limited form action and the
+              "Quick Create" path in any Many2one widget.
+
+            Effect: a merchandiser editing an SO can NOT silently overwrite
+            a customer's billing address from inside the SO line, unless
+            they created that customer record themselves. To make a
+            company-wide change to a customer, route the request to Howard.
+
+            Howard (and any other future member of
+            group_contacts_full_view) is exempted by the permissive rule
+            below: ir.rule access decisions OR across groups, so the
+            permissive [(1,'=',1)] domain wins for users in the full-view
+            group.
+        -->
+        <record id="rule_partner_write_own_only" model="ir.rule">
+            <field name="name">CW Contacts: write/unlink own only (default)</field>
+            <field name="model_id" ref="base.model_res_partner"/>
+            <field name="groups" eval="[(4, ref('base.group_user'))]"/>
+            <field name="domain_force">[('create_uid', '=', user.id)]</field>
+            <field name="perm_read" eval="False"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_unlink" eval="True"/>
+        </record>
+
+        <!--
+            Bypass rule for Howard (and any future full-view member).
+
+            Domain [(1,'=',1)] = match everything. perm_read False is
+            intentional: we don't restrict read at the rule layer; the
+            broad read granted by base.group_user is sufficient and
+            avoids accidentally tightening read for the rest of the ERP.
+        -->
+        <record id="rule_partner_full_access_for_howard" model="ir.rule">
+            <field name="name">CW Contacts: full write/unlink for full-view members</field>
+            <field name="model_id" ref="base.model_res_partner"/>
+            <field name="groups" eval="[(4, ref('group_contacts_full_view'))]"/>
+            <field name="domain_force">[(1, '=', 1)]</field>
+            <field name="perm_read" eval="False"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_unlink" eval="True"/>
+        </record>
+
+    </data>
+</odoo>

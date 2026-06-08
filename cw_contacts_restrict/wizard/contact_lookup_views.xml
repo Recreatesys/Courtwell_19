@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+
+        <record id="view_cw_contact_lookup_form" model="ir.ui.view">
+            <field name="name">cw.contact.lookup.form</field>
+            <field name="model">cw.contact.lookup</field>
+            <field name="arch" type="xml">
+                <form string="Look up a contact">
+                    <sheet>
+                        <div class="oe_title">
+                            <h2>Find a contact</h2>
+                            <p>
+                                Type a name to find an existing contact. Only individual
+                                matches are shown — there is no full directory list.
+                                To create a new contact instead, use the "New Contact"
+                                menu.
+                            </p>
+                        </div>
+                        <group>
+                            <field name="partner_id"
+                                   options="{'no_create': True, 'no_create_edit': True, 'no_quick_create': True, 'no_open': True}"/>
+                        </group>
+                    </sheet>
+                    <footer>
+                        <button name="action_open"
+                                type="object"
+                                string="Open Contact"
+                                class="btn-primary"/>
+                        <button string="Cancel"
+                                class="btn-secondary"
+                                special="cancel"/>
+                    </footer>
+                </form>
+            </field>
+        </record>
+
+        <record id="action_cw_contact_lookup" model="ir.actions.act_window">
+            <field name="name">Find Contact</field>
+            <field name="res_model">cw.contact.lookup</field>
+            <field name="view_mode">form</field>
+            <field name="target">new</field>
+        </record>
+
+    </data>
+</odoo>

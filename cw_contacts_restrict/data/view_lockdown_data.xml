@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="0">
+
+        <!--
+            Defense-in-depth: narrow the standard res.partner list and
+            kanban views so they are only loadable by members of
+            group_contacts_full_view.
+
+            ir.ui.view.group_ids (renamed from groups_id in Odoo 18+)
+            controls who is allowed to READ the view
+            definition. When a user lacks access to a view, Odoo falls
+            back to another view of the same type. We gate the only base
+            list and kanban views, so non-Howard users get "no view of
+            this type available" when they try list_view or kanban_view
+            mode anywhere in the ERP — including the "Search More" dialog
+            on every res.partner Many2one field.
+
+            This is data, not metadata: writing to a view shipped by a
+            different module would normally be a code smell. The
+            uninstall_hook in hooks.py reverses the gate when this module
+            is removed, so the change is reversible.
+
+            The <function> tag invokes ir.ui.view.write at install / update
+            time. The eval expression resolves the two XML IDs to record
+            IDs, then issues a single write call.
+
+            If either of the standard view IDs is missing (e.g. a future
+            Odoo version renames base.res_partner_kanban_view), this call
+            will raise. That is intentional — the gate is the whole point
+            of the module, so a missing target should fail loudly rather
+            than silently leave the bulk view exposed.
+        -->
+        <function model="ir.ui.view" name="write" eval="(
+            [
+                ref('base.view_partner_tree'),
+                ref('base.res_partner_kanban_view'),
+            ],
+            {
+                'group_ids': [(6, 0, [ref('cw_contacts_restrict.group_contacts_full_view')])],
+            },
+        )"/>
+
+    </data>
+</odoo>

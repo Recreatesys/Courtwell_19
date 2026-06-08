@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="0">
+
+        <!--
+            Gate the standard Contacts top-level menu to the full-view
+            group. After this update, only members of
+            group_contacts_full_view see the Contacts icon on the home
+            screen and its standard kanban/list/form/pivot action.
+
+            NOTE on persistence: this record updates contacts.menu_contacts
+            from another module's namespace. The change survives upgrades
+            of cw_contacts_restrict (this block has noupdate="0", so the
+            gate is re-applied on each -u). However, a stand-alone
+            -u contacts will rewrite the menu back to its base defaults
+            (no groups_id). If you run -u contacts (or -u base / -u all),
+            follow with -u cw_contacts_restrict to re-apply the gate.
+        -->
+        <record id="contacts.menu_contacts" model="ir.ui.menu">
+            <field name="group_ids" eval="[(6, 0, [ref('cw_contacts_restrict.group_contacts_full_view')])]"/>
+        </record>
+
+        <!--
+            Also gate the underlying act_window so URL-pinning a known
+            action ID cannot bypass the menu gate.
+
+            Field name note: Odoo 19 renamed groups_id -> group_ids on
+            ir.ui.menu, ir.actions.act_window, and ir.ui.view (the M2M
+            to res.groups). ir.rule.groups is unchanged.
+        -->
+        <record id="contacts.action_contacts" model="ir.actions.act_window">
+            <field name="group_ids" eval="[(6, 0, [ref('cw_contacts_restrict.group_contacts_full_view')])]"/>
+        </record>
+
+        <!--
+            Limited action: form-only on res.partner.
+
+            Default action when the user opens the limited "Contacts" menu.
+            view_mode is "form" alone, so no list / kanban / pivot view is
+            available even via URL hacking (?view_type=list returns an
+            error). The action opens a blank create form by default; to
+            find an existing contact, the user takes the "Find Contact"
+            sub-menu which routes through the cw.contact.lookup wizard.
+        -->
+        <record id="action_contacts_limited" model="ir.actions.act_window">
+            <field name="name">New Contact</field>
+            <field name="res_model">res.partner</field>
+            <field name="view_mode">form</field>
+            <field name="target">current</field>
+            <field name="context">{}</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">
+                    Create a new contact
+                </p>
+                <p>
+                    Fill in the form to add a new contact. To find an
+                    existing contact, use the "Find Contact" menu instead.
+                </p>
+            </field>
+        </record>
+
+        <!--
+            Top-level limited Contacts menu, visible to every internal
+            user. Howard will see this in addition to the standard
+            Contacts menu; he can ignore it.
+
+            web_icon is intentionally left unset; Odoo falls back to a
+            generic icon. Replace with a custom static/description/icon.png
+            reference if you want a distinct visual.
+        -->
+        <menuitem id="menu_contacts_limited"
+                  name="Contacts"
+                  sequence="80"
+                  groups="base.group_user"
+                  web_icon="contacts,static/description/icon.png"/>
+
+        <menuitem id="menu_contacts_limited_new"
+                  name="New Contact"
+                  parent="menu_contacts_limited"
+                  action="action_contacts_limited"
+                  sequence="10"/>
+
+        <menuitem id="menu_contacts_limited_lookup"
+                  name="Find Contact"
+                  parent="menu_contacts_limited"
+                  action="action_cw_contact_lookup"
+                  sequence="20"/>
+
+    </data>
+</odoo>

@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="0">
+
+        <!--
+            Category and privilege for "Contacts / Full Directory Access".
+
+            Mirrors the structure used by cw_shipping_workflow: a custom
+            category + privilege so the group appears under its own heading
+            on the Settings -> Users assignment screen (rather than buried
+            inside the Administration tab).
+        -->
+        <record id="module_category_cw_contacts" model="ir.module.category">
+            <field name="name">Contacts</field>
+            <field name="description">Courtwell Contacts directory access</field>
+            <!--
+                Sequence 25 matches cw_shipping_workflow's "Shipping"
+                category, so the "Contacts / Full Directory Access"
+                checkbox lands in the main groups list on the user form
+                (Settings -> Users -> select user -> Access Rights),
+                next to Shipping / Accounting / etc. A higher sequence
+                (e.g. 75) buries the category behind a collapse, which
+                made the group hard to find during initial assignment
+                on CW19_Test.
+            -->
+            <field name="sequence">25</field>
+        </record>
+
+        <record id="privilege_cw_contacts" model="res.groups.privilege">
+            <field name="name">Contacts</field>
+            <field name="category_id" ref="module_category_cw_contacts"/>
+            <field name="sequence">10</field>
+        </record>
+
+        <!--
+            Full Directory Access — Howard only.
+
+            Members see the standard Contacts app: full kanban, list, form,
+            pivot, all partners writable. A permissive ir.rule
+            (cw_contacts_restrict.rule_partner_full_access_for_howard) gives
+            them a bypass against the default own-only write restriction.
+
+            WARNING: This is the single point of authority for the full
+            contact directory. If Howard is unavailable and someone else
+            needs the bulk view, add them to this group via Settings ->
+            Users -> select user -> Other -> Contacts. The change is live
+            immediately.
+
+            WARNING (matching cw_shipping_workflow's group comment): if a
+            broader installed group grants standard partner list/kanban
+            view access back to a member of this group's restricted users,
+            the gate is OR-overridden. The view_lockdown_data.xml patches
+            base.view_partner_tree and base.res_partner_kanban_view
+            groups_id directly to defend against this.
+        -->
+        <record id="group_contacts_full_view" model="res.groups">
+            <field name="name">Contacts / Full Directory Access</field>
+            <field name="privilege_id" ref="privilege_cw_contacts"/>
+            <field name="implied_ids" eval="[(4, ref('base.group_user'))]"/>
+            <field name="comment">Members see the full Contacts app — kanban, list, pivot, all partners — and can edit any contact. Everyone else in the company is limited to a form-only Contacts UI: they can create new contacts and look up existing contacts by name one at a time via a wizard, and can only edit contacts they created themselves. Howard is the only intended member. If the company needs a backup, add Settings users to this group manually.</field>
+        </record>
+
+    </data>
+</odoo>
