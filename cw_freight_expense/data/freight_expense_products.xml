@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo noupdate="1">
+
+    <!--
+        8 expense products, one per freight cost category.
+
+        Each is configured as:
+          * Service type (no inventory)
+          * can_be_expensed = True (appears in hr.expense product picker)
+          * sale_ok / purchase_ok = False (not exposed in SO/PO line pickers)
+          * default standard_price = 0.0 (filled per-expense)
+
+        noupdate=1 so admins can edit a product's expense account etc.
+        from the UI without subsequent module upgrades reverting their
+        change.
+    -->
+
+    <record id="product_freight_inland_transport" model="product.template">
+        <field name="name">Freight — Inland Transport</field>
+        <field name="type">service</field>
+        <field name="can_be_expensed" eval="True"/>
+        <field name="sale_ok" eval="False"/>
+        <field name="purchase_ok" eval="False"/>
+        <field name="standard_price">0.0</field>
+        <field name="description">Trucking / drayage from factory to origin port. Logged as an expense from cw.shipment freight finalization.</field>
+    </record>
+
+    <record id="product_freight_export_clearance" model="product.template">
+        <field name="name">Freight — Export Clearance</field>
+        <field name="type">service</field>
+        <field name="can_be_expensed" eval="True"/>
+        <field name="sale_ok" eval="False"/>
+        <field name="purchase_ok" eval="False"/>
+        <field name="standard_price">0.0</field>
+        <field name="description">Origin-side customs clearance act. Logged from cw.shipment freight finalization.</field>
+    </record>
+
+    <record id="product_freight_customs_filing" model="product.template">
+        <field name="name">Freight — Customs Filing Fee</field>
+        <field name="type">service</field>
+        <field name="can_be_expensed" eval="True"/>
+        <field name="sale_ok" eval="False"/>
+        <field name="purchase_ok" eval="False"/>
+        <field name="standard_price">0.0</field>
+        <field name="description">Customs declaration filing fee, separate from the clearance act.</field>
+    </record>
+
+    <record id="product_freight_bl_fee" model="product.template">
+        <field name="name">Freight — BL Fee</field>
+        <field name="type">service</field>
+        <field name="can_be_expensed" eval="True"/>
+        <field name="sale_ok" eval="False"/>
+        <field name="purchase_ok" eval="False"/>
+        <field name="standard_price">0.0</field>
+        <field name="description">Bill of Lading issuance fee.</field>
+    </record>
+
+    <record id="product_freight_cert_origin" model="product.template">
+        <field name="name">Freight — Certificate of Origin</field>
+        <field name="type">service</field>
+        <field name="can_be_expensed" eval="True"/>
+        <field name="sale_ok" eval="False"/>
+        <field name="purchase_ok" eval="False"/>
+        <field name="standard_price">0.0</field>
+        <field name="description">Cost of obtaining the Certificate of Origin from chamber of commerce or equivalent.</field>
+    </record>
+
+    <record id="product_freight_documentation" model="product.template">
+        <field name="name">Freight — Documentation (Other)</field>
+        <field name="type">service</field>
+        <field name="can_be_expensed" eval="True"/>
+        <field name="sale_ok" eval="False"/>
+        <field name="purchase_ok" eval="False"/>
+        <field name="standard_price">0.0</field>
+        <field name="description">Misc paperwork: telex release, AMS, ENS, ISF, packing list amendments, etc.</field>
+    </record>
+
+    <record id="product_freight_port_fees" model="product.template">
+        <field name="name">Freight — Port Fees</field>
+        <field name="type">service</field>
+        <field name="can_be_expensed" eval="True"/>
+        <field name="sale_ok" eval="False"/>
+        <field name="purchase_ok" eval="False"/>
+        <field name="standard_price">0.0</field>
+        <field name="description">Terminal Handling Charges, port handling, demurrage.</field>
+    </record>
+
+    <record id="product_freight_actual" model="product.template">
+        <field name="name">Freight — Ocean / Air Freight</field>
+        <field name="type">service</field>
+        <field name="can_be_expensed" eval="True"/>
+        <field name="sale_ok" eval="False"/>
+        <field name="purchase_ok" eval="False"/>
+        <field name="standard_price">0.0</field>
+        <field name="description">The actual ocean or air freight leg cost.</field>
+    </record>
+
+</odoo>

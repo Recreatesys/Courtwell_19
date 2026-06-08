@@ -1,0 +1,179 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!--
+        Extend the cw.shipment form:
+          1. Add Finalize / Reset buttons + status badge to the header
+          2. Add a "Freight Cost Breakdown" notebook page with the 8
+             decomposed fields, total, and a smart button to the
+             generated expenses.
+
+        XPath uses anchors that exist in cw_shipment.cw_shipment_form
+        (verified live).
+    -->
+    <record id="view_cw_shipment_form_freight_expense" model="ir.ui.view">
+        <field name="name">cw.shipment.form.freight.expense</field>
+        <field name="model">cw.shipment</field>
+        <field name="inherit_id" ref="cw_shipment.view_cw_shipment_form"/>
+        <field name="arch" type="xml">
+
+            <!-- Header buttons + ready-only badge -->
+            <xpath expr="//header/field[@name='status']" position="before">
+                <button name="action_recompute_freight_allocation"
+                        type="object"
+                        string="Recompute Allocation"
+                        invisible="allocation_method == 'single' or freight_finalized"
+                        help="Compute container-level allocation percentages using the selected method."/>
+                <button name="action_finalize_freight"
+                        type="object"
+                        string="Finalize Freight &amp; Post to Expense"
+                        class="btn-primary"
+                        invisible="freight_finalized or total_freight_cost &lt;= 0"
+                        confirm="This will create one expense record per non-zero freight category and lock the breakdown. Continue?"/>
+                <button name="action_reset_freight_finalization"
+                        type="object"
+                        string="Reset Freight Finalization"
+                        invisible="not freight_finalized"
+                        confirm="This will delete the generated expenses (only if still in draft) and unlock the breakdown for editing. Continue?"/>
+                <field name="freight_finalized" widget="boolean_toggle"
+                       readonly="1" invisible="not freight_finalized"/>
+            </xpath>
+
+            <!-- Smart button row: link to generated expenses -->
+            <xpath expr="//sheet" position="inside">
+                <div class="oe_button_box" name="freight_expense_button_box">
+                    <button name="action_view_freight_expenses"
+                            type="object"
+                            class="oe_stat_button"
+                            icon="fa-money"
+                            invisible="freight_expense_count == 0">
+                        <field name="freight_expense_count" widget="statinfo"
+                               string="Freight Expenses"/>
+                    </button>
+                </div>
+            </xpath>
+
+            <!-- Freight Cost Breakdown notebook page -->
+            <xpath expr="//notebook/page[@name='containers']" position="after">
+                <page string="Freight Cost Breakdown" name="freight_breakdown">
+                    <group>
+                        <group string="Origin-Side Costs">
+                            <field name="inland_transport_cost"
+                                   readonly="freight_finalized"/>
+                            <field name="export_clearance_cost"
+                                   readonly="freight_finalized"/>
+                            <field name="customs_filing_cost"
+                                   readonly="freight_finalized"/>
+                        </group>
+                        <group string="Documentation">
+                            <field name="bl_fee_cost"
+                                   readonly="freight_finalized"/>
+                            <field name="cert_origin_cost"
+                                   readonly="freight_finalized"/>
+                            <field name="documentation_cost"
+                                   readonly="freight_finalized"/>
+                        </group>
+                    </group>
+                    <group>
+                        <group string="Port &amp; Freight">
+                            <field name="port_fees_cost"
+                                   readonly="freight_finalized"/>
+                            <field name="actual_freight_cost"
+                                   readonly="freight_finalized"/>
+                        </group>
+                        <group string="Totals">
+                            <field name="total_freight_cost"
+                                   class="oe_subtotal_footer_separator"/>
+                            <field name="freight_finalized" readonly="1"/>
+                        </group>
+                    </group>
+                    <separator string="Consolidation / Allocation"/>
+                    <group>
+                        <group>
+                            <field name="allocation_method"
+                                   readonly="freight_finalized"/>
+                        </group>
+                        <group>
+                            <field name="allocation_total_pct"
+                                   widget="percentage"
+                                   invisible="allocation_method == 'single'"/>
+                        </group>
+                    </group>
+                    <div class="text-muted"
+                         invisible="allocation_method == 'single'">
+                        <p>This shipment is consolidated. The 8 freight cost categories above are the <b>shipment totals</b>; they will be split per container based on the allocation method, and each container's share is posted to its own project's analytic account.</p>
+                        <p>Click <b>Recompute Allocation</b> in the header after adjusting container values to populate the per-container percentages, then <b>Finalize Freight</b> to post.</p>
+                    </div>
+                    <separator string="Where this lands"/>
+                    <div class="text-muted">
+                        <p>Import duties are NOT captured here — clients' customs brokers handle import-side duties separately.</p>
+                        <p>When you click <b>Finalize Freight &amp; Post to Expense</b>:</p>
+                        <ul>
+                            <li>One <code>hr.expense</code> record is created per non-zero category × per container (or once total if Allocation Method = Single).</li>
+                            <li>Each expense carries its container's project analytic account, so cost rolls up on each Project's cost view and each Sale Order's profitability tab.</li>
+                            <li>If a consolidated shipment has containers without a linked Sale Order (and therefore no project), finalization is blocked with an explanatory error.</li>
+                        </ul>
+                    </div>
+                </page>
+            </xpath>
+
+        </field>
+    </record>
+
+    <!--
+        Container inline list — add per-container consolidation fields
+        so Aris can fill in sale_order_id, dimensions, and see the
+        allocated freight amount per container.
+    -->
+    <record id="view_cw_shipment_form_container_consolidation" model="ir.ui.view">
+        <field name="name">cw.shipment.form.container.consolidation</field>
+        <field name="model">cw.shipment</field>
+        <field name="inherit_id" ref="cw_shipment.view_cw_shipment_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='container_ids']/list/field[@name='cntr_number']" position="after">
+                <field name="sale_order_id" optional="show"
+                       options="{'no_create': True}"/>
+                <field name="project_id" optional="show" readonly="1"/>
+                <field name="weight_kg" optional="hide"/>
+                <field name="volume_cbm" optional="hide"/>
+                <field name="order_value" optional="hide"/>
+                <field name="allocated_freight_pct" optional="show"
+                       widget="percentage"/>
+                <field name="allocated_freight_amount" optional="show"
+                       readonly="1"/>
+                <field name="currency_id" column_invisible="1"/>
+            </xpath>
+        </field>
+    </record>
+
+    <!--
+        Extend the hr.expense list view with a Freight Category column +
+        group-by for BI ("port fees across 2026" type queries).
+    -->
+    <record id="view_hr_expense_list_freight_category" model="ir.ui.view">
+        <field name="name">hr.expense.list.freight.category</field>
+        <field name="model">hr.expense</field>
+        <field name="inherit_id" ref="hr_expense.hr_expense_view_expenses_analysis_tree"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='name']" position="after">
+                <field name="cw_freight_category" optional="show"/>
+                <field name="cw_shipment_id" optional="hide"/>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="view_hr_expense_search_freight_category" model="ir.ui.view">
+        <field name="name">hr.expense.search.freight.category</field>
+        <field name="model">hr.expense</field>
+        <field name="inherit_id" ref="hr_expense.hr_expense_view_search"/>
+        <field name="arch" type="xml">
+            <xpath expr="//search" position="inside">
+                <filter name="group_by_category" string="Freight Category"
+                        context="{'group_by': 'cw_freight_category'}"/>
+                <filter name="group_by_shipment" string="Shipment"
+                        context="{'group_by': 'cw_shipment_id'}"/>
+            </xpath>
+        </field>
+    </record>
+
+</odoo>
