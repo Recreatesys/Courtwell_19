@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!--
+        Patch the cw_contacts_phase1 partner form: make client_code
+        read-only for everyone EXCEPT members of the Client Code
+        Approver group. Defense-in-depth — the server-side write()
+        override in res_partner.py is the authoritative guard.
+
+        Uses the computed `can_assign_client_code` field as the
+        readonly toggle. Computed has depends_context('uid'), so it
+        re-evaluates per user.
+    -->
+    <record id="view_partner_form_client_code_approval" model="ir.ui.view">
+        <field name="name">res.partner.form.cw.client.code.approval</field>
+        <field name="model">res.partner</field>
+        <field name="inherit_id" ref="cw_contacts_phase1.view_partner_form_cw_phase1"/>
+        <field name="arch" type="xml">
+
+            <!-- Inject the gating boolean into the form so the readonly
+                 expression on client_code can reference it. -->
+            <xpath expr="//field[@name='client_code']" position="before">
+                <field name="can_assign_client_code" invisible="1"/>
+            </xpath>
+
+            <xpath expr="//field[@name='client_code']" position="attributes">
+                <attribute name="readonly">not can_assign_client_code</attribute>
+                <attribute name="placeholder">2 letters, assigned by Howard or Eva</attribute>
+                <attribute name="help">Read-only for everyone except members of the "Client Code Approver" group (Howard, Eva). Save the client without a code if you don't have one yet — an assignment request will be sent automatically.</attribute>
+            </xpath>
+
+        </field>
+    </record>
+
+</odoo>

@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="0">
+
+        <!--
+            Group: Client Code Approver
+
+            Members are the only users allowed to write res.partner.client_code.
+            Assigned to Howard and Eva via Settings -> Users -> Other -> Contacts.
+
+            Reuses the "Contacts" privilege category created by cw_contacts_restrict
+            so the checkbox lands next to "Contacts / Full Directory Access" on the
+            user form, rather than buried in its own category. Defensive fallback
+            below creates the category/privilege if cw_contacts_restrict is not
+            installed at the same time.
+        -->
+        <record id="module_category_cw_contacts" model="ir.module.category">
+            <field name="name">Contacts</field>
+            <field name="description">Courtwell Contacts directory access</field>
+            <field name="sequence">25</field>
+        </record>
+
+        <!--
+            Separate privilege from cw_contacts_restrict's "Contacts" privilege.
+
+            In Odoo 19, groups that share a privilege render as a single
+            radio-style selector on the user form (one-of-N). Reusing the
+            same "Contacts" privilege as Full Directory Access would force
+            users into picking ONE of the two — Howard couldn't hold both.
+            This privilege is dedicated to client-code approval so the
+            checkbox is independent of Full Directory Access.
+        -->
+        <record id="privilege_cw_client_code_approval" model="res.groups.privilege">
+            <field name="name">Client Code Approval</field>
+            <field name="category_id" ref="module_category_cw_contacts"/>
+            <field name="sequence">20</field>
+        </record>
+
+        <record id="group_client_code_approver" model="res.groups">
+            <field name="name">Client Code Approver</field>
+            <field name="privilege_id" ref="privilege_cw_client_code_approval"/>
+            <field name="implied_ids" eval="[(4, ref('base.group_user'))]"/>
+            <field name="comment">Members can write the 2-letter Client Code on Client partners and clear "Assign Client Code" activities. Everyone else sees client_code as read-only. Intended members: Howard and Eva. Independent of "Full Directory Access" — a user can hold both.</field>
+        </record>
+
+    </data>
+</odoo>

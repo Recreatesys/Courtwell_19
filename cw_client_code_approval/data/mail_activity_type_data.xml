@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo noupdate="1">
+
+    <!--
+        Activity type: Assign Client Code
+
+        Auto-scheduled on a res.partner whenever a non-approver creates a
+        Client without a client_code, or when a CRM lead transition is
+        blocked because the partner still has no code. Approvers complete
+        the activity by typing the 2 letters into the partner form and
+        marking the activity Done.
+
+        delay_count = 1 day, summary = brief, no chained activity. The
+        activity icon is the standard "user-plus" — chosen because the
+        feel matches "new contact needs follow-up" more than a clipboard.
+    -->
+    <record id="mail_activity_type_assign_client_code" model="mail.activity.type">
+        <field name="name">Assign Client Code</field>
+        <field name="summary">Assign 2-letter Client Code</field>
+        <field name="icon">fa-id-card-o</field>
+        <field name="delay_count">1</field>
+        <field name="delay_unit">days</field>
+        <field name="res_model">res.partner</field>
+        <field name="category">default</field>
+        <field name="sequence">15</field>
+    </record>
+
+</odoo>

@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="0">
+
+        <!--
+            Approver-only worklist: "Clients Pending Codes"
+
+            One screen showing every Client partner with no client_code
+            assigned. The approver opens it, batch-assigns codes, and
+            the per-partner write hook clears the linked activity and
+            triggers retry-generation of any sourcing references that
+            were waiting on the code.
+
+            Visible only to members of group_client_code_approver via
+            the menu's groups_id. The action itself is also gated by
+            groups so a direct URL hit returns "access denied" for
+            non-approvers.
+        -->
+        <record id="action_clients_pending_codes" model="ir.actions.act_window">
+            <field name="name">Clients Pending Codes</field>
+            <field name="res_model">res.partner</field>
+            <field name="view_mode">list,form</field>
+            <field name="domain">[('contact_type', '=', 'client'), ('client_code', '=', False)]</field>
+            <field name="context">{'default_contact_type': 'client'}</field>
+            <field name="group_ids" eval="[(4, ref('cw_client_code_approval.group_client_code_approver'))]"/>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">
+                    No clients are waiting for a code.
+                </p>
+                <p>
+                    When a Merchandiser saves a Client partner without a 2-letter
+                    Code, it lands here. Set the Client Code on the partner form;
+                    the linked "Assign Client Code" activity will clear automatically.
+                </p>
+            </field>
+        </record>
+
+        <!--
+            Menu placement: top-level "Contacts" app, alongside the
+            standard Contacts list. Restricted to approvers via
+            group_ids so merchandisers never see it.
+        -->
+        <menuitem id="menu_clients_pending_codes"
+                  name="Clients Pending Codes"
+                  parent="contacts.menu_contacts"
+                  action="action_clients_pending_codes"
+                  sequence="50"
+                  groups="cw_client_code_approval.group_client_code_approver"/>
+
+    </data>
+</odoo>
