@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!--
+        Extend the cw.shipment form with:
+          1. A coloured banner showing the inspection-gate state
+          2. A smart button to view all linked inspections
+    -->
+    <record id="view_cw_shipment_form_inspection_gate" model="ir.ui.view">
+        <field name="name">cw.shipment.form.inspection.gate</field>
+        <field name="model">cw.shipment</field>
+        <field name="inherit_id" ref="cw_shipment.view_cw_shipment_form"/>
+        <field name="arch" type="xml">
+
+            <!-- Smart button: linked inspections + cleared/blocking badge -->
+            <xpath expr="//sheet" position="inside">
+                <div class="oe_button_box" name="inspection_gate_button_box">
+                    <button name="action_view_linked_inspections"
+                            type="object"
+                            class="oe_stat_button" icon="fa-check-square-o"
+                            invisible="inspection_count == 0">
+                        <div class="o_field_widget o_stat_info">
+                            <span class="o_stat_text">Inspections</span>
+                            <span class="o_stat_value">
+                                <field name="inspections_cleared_count"/>
+                                /
+                                <field name="inspection_count"/>
+                            </span>
+                        </div>
+                    </button>
+                </div>
+            </xpath>
+
+            <!-- Banner: blocked / partial / all cleared -->
+            <xpath expr="//sheet" position="before">
+                <div class="alert alert-danger" role="alert"
+                     invisible="inspection_gate_state != 'blocked'">
+                    <strong>Loading Blocked.</strong>
+                    <field name="inspections_blocking_count" readonly="1" nolabel="1"/>
+                    linked inspection(s) are not cleared for loading. This shipment
+                    cannot advance past <i>Booked</i> until each is approved with
+                    <i>Load for Shipping</i>.
+                </div>
+                <div class="alert alert-warning" role="alert"
+                     invisible="inspection_gate_state != 'partial_cleared'">
+                    <strong>Partially Cleared.</strong>
+                    <field name="inspections_cleared_count" readonly="1" nolabel="1"/>
+                    of <field name="inspection_count" readonly="1" nolabel="1"/>
+                    linked inspections are cleared.
+                    <field name="inspections_blocking_count" readonly="1" nolabel="1"/>
+                    still blocking — shipment cannot advance past <i>Booked</i> yet.
+                </div>
+                <div class="alert alert-success" role="alert"
+                     invisible="inspection_gate_state != 'all_cleared'">
+                    <strong>All Inspections Cleared.</strong>
+                    Shipment may advance to <i>Shipped</i>.
+                </div>
+                <field name="inspection_gate_state" invisible="1"/>
+                <field name="inspection_count" invisible="1"/>
+                <field name="inspections_cleared_count" invisible="1"/>
+                <field name="inspections_blocking_count" invisible="1"/>
+            </xpath>
+
+        </field>
+    </record>
+
+</odoo>
