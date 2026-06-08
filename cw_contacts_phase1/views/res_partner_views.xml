@@ -19,9 +19,10 @@
                 <group>
                     <group>
                         <field name="contact_type"/>
-                        <field name="service_provider_type"
+                        <field name="service_provider_type_id"
                                invisible="contact_type != 'service_provider'"
-                               required="contact_type == 'service_provider'"/>
+                               required="contact_type == 'service_provider'"
+                               options="{'no_quick_create': False}"/>
                     </group>
                     <group>
                         <field name="client_code"

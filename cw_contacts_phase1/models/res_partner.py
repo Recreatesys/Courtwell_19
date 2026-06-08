@@ -86,15 +86,14 @@ class ResPartner(models.Model):
              'role-based access, and downstream sourcing workflows.',
     )
 
-    service_provider_type = fields.Selection(
-        [
-            ('freight', 'Freight Forwarder'),
-            ('inspection', 'Inspection Company'),
-            ('customs', 'Customs Broker'),
-            ('testing', 'Testing Lab / Certification Body'),
-        ],
+    service_provider_type_id = fields.Many2one(
+        'cw.service.provider.type',
         string='Service Provider Type',
-        help='Visible only when Contact Type = Service Provider.',
+        ondelete='restrict',
+        tracking=True,
+        help='Visible only when Contact Type = Service Provider. Users with '
+             'create access on cw.service.provider.type can add new types '
+             'inline via the dropdown.',
     )
 
     # ------------------------------------------------------------------
@@ -426,10 +425,10 @@ class ResPartner(models.Model):
                         f'all clients.'
                     )
 
-    @api.constrains('contact_type', 'service_provider_type')
+    @api.constrains('contact_type', 'service_provider_type_id')
     def _check_service_provider_type(self):
         for rec in self:
-            if rec.service_provider_type and rec.contact_type != 'service_provider':
+            if rec.service_provider_type_id and rec.contact_type != 'service_provider':
                 raise ValidationError(
                     'Service Provider Type may only be set when Contact Type '
                     '= Service Provider.'
@@ -452,7 +451,7 @@ class ResPartner(models.Model):
                 rec.customer_rank = 0
                 rec.supplier_rank = 0
             if rec.contact_type != 'service_provider':
-                rec.service_provider_type = False
+                rec.service_provider_type_id = False
 
     @api.onchange('client_code')
     def _onchange_client_code_uppercase(self):

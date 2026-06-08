@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo noupdate="1">
+
+    <record id="spt_freight" model="cw.service.provider.type">
+        <field name="name">Freight Forwarder</field>
+        <field name="code">freight</field>
+        <field name="sequence">10</field>
+    </record>
+
+    <record id="spt_inspection" model="cw.service.provider.type">
+        <field name="name">Inspection Company</field>
+        <field name="code">inspection</field>
+        <field name="sequence">20</field>
+    </record>
+
+    <record id="spt_customs" model="cw.service.provider.type">
+        <field name="name">Customs Broker</field>
+        <field name="code">customs</field>
+        <field name="sequence">30</field>
+    </record>
+
+    <record id="spt_testing" model="cw.service.provider.type">
+        <field name="name">Testing Lab / Certification Body</field>
+        <field name="code">testing</field>
+        <field name="sequence">40</field>
+    </record>
+
+</odoo>

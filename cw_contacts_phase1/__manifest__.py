@@ -1,6 +1,6 @@
 {
     'name': 'CW Contacts — Phase 1',
-    'version': '19.0.1.0.0',
+    'version': '19.0.1.1.0',
     'summary': 'Contact Type classification, Client/Supplier/Service Provider profiles, '
                'custom activity types',
     'description': """
@@ -29,6 +29,7 @@ live in the sourcing_reference module.
     ],
     'data': [
         'security/ir.model.access.csv',
+        'data/cw_service_provider_type_data.xml',
         'views/res_partner_views.xml',
         'data/mail_activity_type_data.xml',
         'data/res_partner_industry_data.xml',

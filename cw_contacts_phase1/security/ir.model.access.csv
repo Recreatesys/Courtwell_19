@@ -7,3 +7,5 @@ access_cw_coverage_market_user,cw.coverage.market user,model_cw_coverage_market,
 access_cw_coverage_market_admin,cw.coverage.market admin,model_cw_coverage_market,base.group_system,1,1,1,1
 access_cw_service_offered_user,cw.service.offered user,model_cw_service_offered,base.group_user,1,0,0,0
 access_cw_service_offered_admin,cw.service.offered admin,model_cw_service_offered,base.group_system,1,1,1,1
+access_cw_service_provider_type_user,cw.service.provider.type user,model_cw_service_provider_type,base.group_user,1,1,1,0
+access_cw_service_provider_type_admin,cw.service.provider.type admin,model_cw_service_provider_type,base.group_system,1,1,1,1
