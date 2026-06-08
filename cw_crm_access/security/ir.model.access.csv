@@ -1,0 +1,10 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_crm_lead_accounting_viewer,access.crm.lead.accounting.viewer,crm.model_crm_lead,group_accounting_crm_viewer,1,0,0,0
+access_crm_stage_accounting_viewer,access.crm.stage.accounting.viewer,crm.model_crm_stage,group_accounting_crm_viewer,1,0,0,0
+access_crm_team_accounting_viewer,access.crm.team.accounting.viewer,sales_team.model_crm_team,group_accounting_crm_viewer,1,0,0,0
+access_crm_tag_accounting_viewer,access.crm.tag.accounting.viewer,sales_team.model_crm_tag,group_accounting_crm_viewer,1,0,0,0
+access_crm_lost_reason_accounting_viewer,access.crm.lost.reason.accounting.viewer,crm.model_crm_lost_reason,group_accounting_crm_viewer,1,0,0,0
+access_crm_recurring_plan_accounting_viewer,access.crm.recurring.plan.accounting.viewer,crm.model_crm_recurring_plan,group_accounting_crm_viewer,1,0,0,0
+access_utm_source_accounting_viewer,access.utm.source.accounting.viewer,utm.model_utm_source,group_accounting_crm_viewer,1,0,0,0
+access_utm_medium_accounting_viewer,access.utm.medium.accounting.viewer,utm.model_utm_medium,group_accounting_crm_viewer,1,0,0,0
+access_utm_campaign_accounting_viewer,access.utm.campaign.accounting.viewer,utm.model_utm_campaign,group_accounting_crm_viewer,1,0,0,0

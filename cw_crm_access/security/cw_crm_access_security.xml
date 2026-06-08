@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="0">
+
+        <!--
+            Accounting / CRM Viewer (Post-Proforma)
+
+            Hardened design: does NOT inherit sales_team.group_sale_salesman.
+            All ACL is declared from scratch in ir.model.access.csv so
+            create/unlink on crm.lead can be hard-denied.
+        -->
+        <record id="group_accounting_crm_viewer" model="res.groups">
+            <field name="name">Accounting / CRM Viewer (Post-Proforma)</field>
+            <field name="comment">Read and chatter on opportunities from Proforma Invoice onward. Granted to Accounting staff who need opportunity context for deposit confirmation, final invoicing, and AR follow-up.</field>
+        </record>
+
+        <!--
+            Record rule: post-proforma stages only
+
+            domain_force is built at module-load time via eval so XML IDs
+            from sourcing_reference resolve to integer stage IDs. If the
+            stage records are recreated, reload this module to refresh the
+            rule.
+        -->
+        <record id="rule_accounting_crm_viewer_lead_stages" model="ir.rule">
+            <field name="name">Accounting CRM Viewer: post-proforma opportunities only</field>
+            <field name="model_id" ref="crm.model_crm_lead"/>
+            <field name="groups" eval="[(4, ref('group_accounting_crm_viewer'))]"/>
+            <field name="domain_force" eval="str([
+                ('stage_id', 'in', [
+                    ref('sourcing_reference.crm_stage_proforma_invoice'),
+                    ref('sourcing_reference.crm_stage_qc'),
+                    ref('sourcing_reference.crm_stage_enroute'),
+                    ref('sourcing_reference.crm_stage_upsell_reorder'),
+                ]),
+            ])"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_unlink" eval="False"/>
+        </record>
+
+    </data>
+</odoo>
