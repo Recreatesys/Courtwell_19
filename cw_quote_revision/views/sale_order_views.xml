@@ -1,0 +1,140 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!--
+        Form view: Revise button in header + revision smart button +
+        small revision info block near the order header.
+    -->
+    <record id="view_order_form_cw_quote_revision" model="ir.ui.view">
+        <field name="name">sale.order.form.cw.quote.revision</field>
+        <field name="model">sale.order</field>
+        <field name="inherit_id" ref="sale.view_order_form"/>
+        <field name="arch" type="xml">
+
+            <!-- Header: Revise button visible on draft/sent, before status -->
+            <xpath expr="//header" position="inside">
+                <button name="action_revise_quotation"
+                        type="object"
+                        string="Revise Quotation"
+                        class="btn-secondary"
+                        invisible="state not in ('draft','sent') or is_superseded"
+                        confirm="This creates a new revision and marks the current quote as superseded. The current quote will remain visible but cannot be confirmed. Continue?"/>
+                <!-- PI lifecycle buttons -->
+                <button name="action_mark_pi_issued"
+                        type="object"
+                        string="Mark PI as Issued"
+                        class="btn-secondary"
+                        invisible="pi_status != 'not_issued' or is_superseded or not proforma_reference"
+                        confirm="Marks this Proforma Invoice as issued and records today's date. Continue?"/>
+                <button name="action_reset_pi_status"
+                        type="object"
+                        string="Reset PI Status"
+                        invisible="pi_status != 'issued'"
+                        confirm="Resets the PI status back to Not Issued. Use only if the PI was marked by mistake. Continue?"/>
+                <field name="pi_status" widget="statusbar"
+                       statusbar_visible="not_issued,issued,superseded"
+                       invisible="not proforma_reference"/>
+            </xpath>
+
+            <!-- Smart button: Revisions count -->
+            <xpath expr="//div[hasclass('oe_button_box')]" position="inside">
+                <button name="action_view_revisions"
+                        type="object"
+                        class="oe_stat_button"
+                        icon="fa-history"
+                        invisible="revision_count &lt; 2">
+                    <field name="revision_count" widget="statinfo"
+                           string="Revisions"/>
+                </button>
+            </xpath>
+
+            <!-- Superseded banner -->
+            <xpath expr="//sheet" position="before">
+                <div class="alert alert-warning text-center"
+                     role="alert"
+                     invisible="not is_superseded">
+                    This quotation has been superseded by a newer revision.
+                    <button name="action_view_revisions"
+                            type="object" class="btn btn-link p-0">
+                        View revision history
+                    </button>
+                </div>
+            </xpath>
+
+            <!-- Revision metadata near the partner block -->
+            <xpath expr="//field[@name='partner_id']" position="after">
+                <field name="revision_number" readonly="1"
+                       invisible="revision_number &lt;= 1"/>
+                <field name="parent_order_id" readonly="1"
+                       invisible="not parent_order_id"/>
+                <field name="revision_root_id" readonly="1" invisible="1"/>
+                <field name="is_superseded" invisible="1"/>
+                <field name="is_latest_revision" invisible="1"/>
+                <field name="proforma_reference" readonly="1"
+                       invisible="not proforma_reference"/>
+                <field name="pi_issued_date" readonly="1"
+                       invisible="pi_status != 'issued'"/>
+            </xpath>
+
+        </field>
+    </record>
+
+    <!--
+        List view: add Rev and Latest columns; group-by Quote Family.
+    -->
+    <record id="view_order_tree_cw_quote_revision" model="ir.ui.view">
+        <field name="name">sale.order.list.cw.quote.revision</field>
+        <field name="model">sale.order</field>
+        <field name="inherit_id" ref="sale.view_order_tree"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='name']" position="after">
+                <field name="revision_number" optional="show"/>
+                <field name="is_latest_revision" optional="show"
+                       widget="boolean_toggle" readonly="1"/>
+                <field name="is_superseded" optional="hide"
+                       widget="boolean_toggle" readonly="1"/>
+                <field name="proforma_reference" optional="hide"/>
+                <field name="pi_status" optional="hide"/>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="view_quotation_tree_cw_quote_revision" model="ir.ui.view">
+        <field name="name">sale.quotation.list.cw.quote.revision</field>
+        <field name="model">sale.order</field>
+        <field name="inherit_id" ref="sale.view_quotation_tree_with_onboarding"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='name']" position="after">
+                <field name="revision_number" optional="show"/>
+                <field name="is_latest_revision" optional="show"
+                       widget="boolean_toggle" readonly="1"/>
+                <field name="is_superseded" optional="hide"
+                       widget="boolean_toggle" readonly="1"/>
+            </xpath>
+        </field>
+    </record>
+
+    <!--
+        Search: filter for "Latest revisions only" + group-by Quote Family.
+    -->
+    <record id="view_sales_order_filter_cw_quote_revision" model="ir.ui.view">
+        <field name="name">sale.order.search.cw.quote.revision</field>
+        <field name="model">sale.order</field>
+        <field name="inherit_id" ref="sale.view_sales_order_filter"/>
+        <field name="arch" type="xml">
+            <xpath expr="//search" position="inside">
+                <separator/>
+                <filter name="filter_latest_revisions"
+                        string="Latest Revisions Only"
+                        domain="[('is_latest_revision','=',True)]"/>
+                <filter name="filter_superseded"
+                        string="Superseded"
+                        domain="[('is_superseded','=',True)]"/>
+                <filter name="group_by_revision_family"
+                        string="Quote Family"
+                        context="{'group_by': 'revision_root_id'}"/>
+            </xpath>
+        </field>
+    </record>
+
+</odoo>
