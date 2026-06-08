@@ -3,3 +3,5 @@ access_sourcing_client_seq_user,sourcing.client.sequence user,model_sourcing_cli
 access_sourcing_client_seq_admin,sourcing.client.sequence admin,model_sourcing_client_sequence,base.group_system,1,1,1,1
 access_sourcing_supplier_seq_user,sourcing.supplier.sequence user,model_sourcing_supplier_sequence,base.group_user,1,0,0,0
 access_sourcing_supplier_seq_admin,sourcing.supplier.sequence admin,model_sourcing_supplier_sequence,base.group_system,1,1,1,1
+access_sourcing_supplier_pool_member_user,sourcing.supplier.pool.member user,model_sourcing_supplier_pool_member,base.group_user,1,0,0,0
+access_sourcing_supplier_pool_member_admin,sourcing.supplier.pool.member admin,model_sourcing_supplier_pool_member,base.group_system,1,1,1,1

@@ -7,6 +7,17 @@
         <field name="inherit_id" ref="crm.crm_lead_view_form"/>
         <field name="arch" type="xml">
 
+            <xpath expr="//div[@name='button_box']" position="inside">
+                <button name="action_view_rfqs"
+                        type="object"
+                        class="oe_stat_button"
+                        icon="fa-truck">
+                    <field name="purchase_order_count"
+                           widget="statinfo"
+                           string="RFQs"/>
+                </button>
+            </xpath>
+
             <xpath expr="//field[@name='partner_id']" position="before">
                 <field name="sourcing_reference"
                        readonly="1"

@@ -1,6 +1,6 @@
 {
     'name': 'CW Sourcing Reference IDs',
-    'version': '19.0.1.1.0',
+    'version': '19.0.1.2.0',
     'summary': 'Auto-generated client/supplier reference IDs, sequence counters, '
                'CRM pipeline stages, and propagation across SO/PO/Project',
     'description': """
@@ -8,10 +8,14 @@ Phase 1 — Reference ID Architecture for the boutique sourcing firm.
 
 Implements the spec from §2 and §12.1:
   * sourcing.client.sequence  — cumulative counter per (client, GS1 segment)
-  * sourcing.supplier.sequence — cumulative counter per (province, GS1 segment)
+  * sourcing.supplier.sequence — pool counter per (province, GS1 segment)
+  * sourcing.supplier.pool.member — per-supplier letter + count within a pool
   * crm.lead generator: OP-{ClientCode}-{Segment}-{YY}-{NNN} on entry to Quotation stage
   * sale.order propagation: QP-... (read from lead)
-  * purchase.order generator/propagation: RQ-{Province}-{Segment}-{YY}-{NNN}, flips to PO- on confirm
+  * purchase.order generator: RQ-{Province}-{Segment}-{Letter}-{NNN},
+    flips to PO- on confirm. Letter is per-(province,segment) supplier index
+    (A, B, …, Z, AA, AB, …); NNN is RFQ count for that supplier in that pool.
+  * crm.lead smart button — RFQs (opens linked POs with default_opportunity_id)
   * project.project Phase 3 hook (stub field PR-... — populated in Phase 3)
   * Client Contact smart button — Orders (non-Lost opportunity count)
   * 8 CRM pipeline stages (Incoming Inquiry, Quotation, Proforma Invoice,
@@ -20,6 +24,10 @@ Implements the spec from §2 and §12.1:
 Models sourcing.client.sequence and sourcing.supplier.sequence were originally
 defined in cw_contacts_phase1; they are migrated here so the reference-ID
 architecture is self-contained.
+
+v19.0.1.2.0 — RFQ ID scheme switched from {YY}-{NNN} (pool-wide sequence) to
+{Letter}-{NNN} (per-supplier letter + per-supplier RFQ count). Existing RFQs
+keep their legacy IDs; new RFQs use the new format.
 """,
     'author': 'CW Internal',
     'category': 'Sales/CRM',

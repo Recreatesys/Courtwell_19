@@ -43,6 +43,21 @@ class CrmLead(models.Model):
         string='GS1 Segment Code',
     )
 
+    purchase_order_ids = fields.One2many(
+        'purchase.order',
+        'opportunity_id',
+        string='RFQs / POs',
+    )
+    purchase_order_count = fields.Integer(
+        compute='_compute_purchase_order_count',
+        string='RFQ Count',
+    )
+
+    @api.depends('purchase_order_ids')
+    def _compute_purchase_order_count(self):
+        for lead in self:
+            lead.purchase_order_count = len(lead.purchase_order_ids)
+
     @api.onchange('gpc_segment_id')
     def _onchange_gpc_segment_clear_class(self):
         for lead in self:
@@ -177,4 +192,24 @@ class CrmLead(models.Model):
                 ('active', '=', True),
             ],
             'context': {'default_partner_id': self.partner_id.id},
+        }
+
+    def action_view_rfqs(self):
+        """Smart-button action — opens RFQs/POs linked to this opportunity.
+
+        New RFQs created from this action pre-fill `opportunity_id` and
+        `gpc_segment_id` via context defaults. `partner_id` is intentionally
+        not defaulted — the PO partner is the supplier, not the client.
+        """
+        self.ensure_one()
+        return {
+            'type': 'ir.actions.act_window',
+            'name': _('RFQs / POs for %s') % (self.sourcing_reference or self.name or ''),
+            'res_model': 'purchase.order',
+            'view_mode': 'list,form',
+            'domain': [('opportunity_id', '=', self.id)],
+            'context': {
+                'default_opportunity_id': self.id,
+                'default_gpc_segment_id': self.gpc_segment_id.id or False,
+            },
         }

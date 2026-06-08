@@ -11,6 +11,9 @@
                        readonly="1"
                        invisible="not sourcing_reference"
                        force_save="1"/>
+                <field name="opportunity_id"
+                       options="{'no_create': True}"
+                       domain="[('type', '=', 'opportunity')]"/>
                 <field name="gpc_segment_id"
                        options="{'no_create': True}"/>
             </xpath>

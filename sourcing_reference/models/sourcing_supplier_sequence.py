@@ -3,17 +3,19 @@ from odoo.exceptions import ValidationError
 
 
 class SourcingSupplierSequence(models.Model):
-    """Cumulative RFQ counter per (province code, GS1 segment).
+    """Pool counter per (province code, GS1 segment).
 
-    The Sequence component of every supplier-side Reference ID is read from
-    here. Cumulative for the lifetime of the system. Never resets.
+    Parent row for `sourcing.supplier.pool.member` records.
+    `next_letter_index` tracks how many distinct suppliers have entered
+    this pool, used to allocate the next supplier-letter (A, B, …, Z, AA…)
+    when a brand-new supplier issues their first RFQ in this pool.
 
-    Phase-1 scope: data structure only. Auto-increment hooks (on RFQ
-    creation) are not configured in this module.
+    `count` is retained as a pool-wide RFQ tally for reporting; the
+    per-supplier operational counter lives on the pool-member row.
     """
 
     _name = 'sourcing.supplier.sequence'
-    _description = 'Sourcing — Province × GS1 Segment Sequence Counter'
+    _description = 'Sourcing — Province × GS1 Segment Pool Counter'
     _order = 'province_code, gpc_segment'
     _rec_name = 'display_name'
 
@@ -32,10 +34,23 @@ class SourcingSupplierSequence(models.Model):
         index=True,
     )
     count = fields.Integer(
-        string='Cumulative Count',
+        string='Pool RFQ Count',
         default=0,
-        help='Number of RFQs issued to date for this province × segment pair. '
-             'Cumulative for the lifetime of the system. Never resets.',
+        help='Cumulative RFQs issued in this (Province × Segment) pool, '
+             'across all suppliers. Reporting metric only — the operational '
+             'NNN sequence lives on the pool-member row.',
+    )
+    next_letter_index = fields.Integer(
+        string='Next Letter Index',
+        default=0,
+        help='Zero-based index of the next supplier-letter to assign in this '
+             'pool. 0 → A, 1 → B, …, 25 → Z, 26 → AA, 27 → AB, … '
+             'Incremented when a brand-new supplier joins the pool.',
+    )
+    member_ids = fields.One2many(
+        'sourcing.supplier.pool.member',
+        compute='_compute_members',
+        string='Pool Members',
     )
     display_name = fields.Char(compute='_compute_display_name', store=True)
 
@@ -45,13 +60,22 @@ class SourcingSupplierSequence(models.Model):
          'There can only be one sequence row per (Province, GS1 Segment) pair.'),
     ]
 
-    @api.depends('province_code', 'gpc_segment', 'count')
+    @api.depends('province_code', 'gpc_segment', 'count', 'next_letter_index')
     def _compute_display_name(self):
         for rec in self:
             rec.display_name = (
                 f'{rec.province_code or "??"} × '
-                f'{rec.gpc_segment or "??"} → {rec.count}'
+                f'{rec.gpc_segment or "??"} → {rec.count} RFQs, '
+                f'{rec.next_letter_index} suppliers'
             )
+
+    def _compute_members(self):
+        Member = self.env['sourcing.supplier.pool.member']
+        for rec in self:
+            rec.member_ids = Member.search([
+                ('province_code', '=', rec.province_code),
+                ('gpc_segment', '=', rec.gpc_segment),
+            ])
 
     @api.constrains('province_code')
     def _check_province_code(self):
