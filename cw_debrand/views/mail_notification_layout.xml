@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+        Outbound email layout debrand.
+
+        Two stock layouts are used by every email Odoo sends:
+          * mail.mail_notification_layout  - the default
+          * mail.mail_notification_light   - the lighter card-style
+            variant (used by some res.partner notifications and the
+            sale "Send by email" flow when light layout is selected)
+
+        We do two things to each:
+          1. Force has_button_access to False at the top of the layout
+             so the portal "View Quotation" / "View Order" CTA block
+             never renders. This removes the courtwell.com.hk portal
+             link from EVERY outbound mail, not just sale quotations.
+             That matches the user's intent ("any links sent out
+             externally") and is much simpler than per-model branching.
+          2. Replace the "Powered by Odoo" footer paragraph with empty
+             content.
+
+        We use t-set on has_button_access (rather than xpath-deleting
+        each `<td t-if="has_button_access">` block) because t-set is a
+        single insertion that fails closed: if a future Odoo release
+        renames the variable, our t-set still runs, the button still
+        renders, but the layout still works. XPath-deleting individual
+        td cells is more brittle.
+    -->
+
+    <!-- 1. mail.mail_notification_layout -->
+    <template id="cw_mail_notification_layout_debrand"
+              inherit_id="mail.mail_notification_layout"
+              name="CW Debrand: kill portal CTA + 'Powered by Odoo' in default mail layout">
+        <!--
+            Insert t-set as the FIRST child of <body>. We can't easily
+            xpath the bare <t t-set="subtype_internal" ...> line
+            inside the template's bare-element top, so target body
+            element and prepend. Odoo's QWeb evaluates t-set in order,
+            so a later t-set inside the template would override us —
+            stock template doesn't do that for has_button_access,
+            so we're safe.
+        -->
+        <xpath expr="//body/t[@t-set='subtype_internal']" position="before">
+            <!--
+                Force-disable portal CTA. With has_button_access=False
+                every `t-if="has_button_access"` and `show_header`
+                conditional in the rest of the template flips closed,
+                so the entire access-button cell, the microdata block,
+                and the spacer cell all skip rendering. Side effect:
+                the whole header (including subtitle row) skips for
+                typical emails where email_notification_force_header
+                is False - acceptable, the body still carries the
+                record name inline.
+            -->
+            <t t-set="has_button_access" t-value="False"/>
+        </xpath>
+
+        <!--
+            Strip "Powered by Odoo" footer block.
+
+            Constraint: mail.mail_notification_invite (a primary-
+            inherit child) does `<xpath expr="//span[@id='mail_unfollow']"
+            position="replace"/>` against the resolved parent. If we
+            delete the wrapper outright, that span vanishes and the
+            child's xpath errors out at upgrade time.
+
+            Solution: replace the wrapper with a stripped-down version
+            that retains the same wrapper element + an empty
+            <span id="mail_unfollow"> as an anchor for the child
+            xpaths. Body of the span is empty so no Unfollow link
+            renders (mail_mail.py's _UNFOLLOW_REGEX rewrites this
+            span per-recipient anyway).
+        -->
+        <xpath expr="//div[@t-if='show_footer'][.//a[contains(@href, 'odoo.com')]]" position="replace">
+            <div t-if="show_footer" style="color: #555555; font-size:11px;">
+                <span t-if="show_unfollow" id="mail_unfollow">
+                    <a href="/mail/unfollow" style="text-decoration:none; color:#555555;">Unfollow</a>
+                </span>
+            </div>
+        </xpath>
+    </template>
+
+    <!-- 2. mail.mail_notification_light -->
+    <template id="cw_mail_notification_light_debrand"
+              inherit_id="mail.mail_notification_light"
+              name="CW Debrand: kill portal CTA + 'Powered by Odoo' in light mail layout">
+        <!--
+            Same has_button_access kill. The light layout sets
+            subtype_internal first too, so we anchor on that.
+        -->
+        <xpath expr="//body/t[@t-set='subtype_internal']" position="before">
+            <t t-set="has_button_access" t-value="False"/>
+        </xpath>
+
+        <!--
+            Strip "Powered by Odoo" footer row. Same constraint as
+            above: preserve <span id="mail_unfollow"> inside so any
+            child template xpaths against it still resolve. The light
+            layout puts this row at the bottom <tr><td align="center"
+            ...>; we replace the <tr> with a debranded version.
+        -->
+        <xpath expr="//tr[.//a[contains(@href, 'odoo.com')]]" position="replace">
+            <tr>
+                <td align="center" style="min-width: 590px;">
+                    <span t-if="show_unfollow" id="mail_unfollow">
+                        <a href="/mail/unfollow" style="text-decoration:none; color:#555555;">Unfollow</a>
+                    </span>
+                </td>
+            </tr>
+        </xpath>
+    </template>
+</odoo>

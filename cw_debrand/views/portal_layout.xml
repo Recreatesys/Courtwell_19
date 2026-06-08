@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+        Customer portal debrand.
+
+        portal.portal_record_sidebar (portal/views/portal_templates.xml
+        ~line 280) renders a "Powered by Odoo" line below the sidebar
+        content on portal record pages (/my/orders/N, /my/invoices/N
+        etc.). It's a plain <div class="d-none d-lg-block mt-5 small
+        text-center text-muted"> containing the attribution link.
+
+        We strip it. Identify the div by its odoo.com link (the
+        wrapping div has only utility classes shared with many other
+        elements, so anchor on the unique inner href).
+    -->
+    <template id="cw_portal_record_sidebar_debrand"
+              inherit_id="portal.portal_record_sidebar"
+              name="CW Debrand: remove 'Powered by Odoo' from portal sidebar">
+        <xpath expr="//div[.//a[contains(@href, 'odoo.com')]]" position="replace">
+            <!-- removed: 'Powered by Odoo' line under sidebar content -->
+        </xpath>
+    </template>
+</odoo>

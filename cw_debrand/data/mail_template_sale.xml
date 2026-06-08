@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+        Override of sale.email_template_edi_sale.
+
+        Stock template lives in `sale/data/mail_template_data.xml` inside
+        a <data noupdate="1"> block — that means stock body_html only
+        seeds on first install of `sale` and won't overwrite changes on
+        upgrade. Our override does NOT set noupdate, so every upgrade of
+        cw_debrand re-asserts our body (an admin who edits the template
+        in the UI gets reset on next module upgrade — by design).
+
+        The "View Quotation" portal CTA does NOT live in this template
+        body — it's injected by mail.mail_notification_layout via the
+        `has_button_access` flag. We disable that in
+        views/mail_notification_layout.xml.
+
+        Body content: structurally identical to stock except we drop
+        the "Do not hesitate to contact us" line and direct the
+        client to reply to the email — the merchandiser's contact
+        details come through via their Odoo user signature, which
+        the stock template already renders at the bottom.
+    -->
+    <record id="sale.email_template_edi_sale" model="mail.template" forcecreate="False">
+        <field name="subject">{{ object.company_id.name }} {{ object.state in ('draft', 'sent') and 'Quotation' or 'Order' }} (Ref {{ object.name or 'n/a' }})</field>
+        <field name="body_html" type="html">
+<div style="margin: 0px; padding: 0px;">
+    <p style="margin: 0px; padding: 0px; font-size: 13px;">
+        <t t-set="doc_name" t-value="'quotation' if object.state in ('draft', 'sent') else 'order'"/>
+        Hello,
+        <br/><br/>
+        Your <t t-out="doc_name or ''">quotation</t> <span style="font-weight: bold;" t-out="object.name or ''"></span>
+        <t t-if="object.origin">
+            (with reference: <t t-out="object.origin or ''">S00052</t> )
+        </t>
+        amounting in <span style="font-weight: bold;" t-out="format_amount(object.amount_total, object.currency_id) or ''">$ 10.00</span> is ready for your review.
+        <br/>
+        <t t-set="documents" t-value="object._get_product_documents()"/>
+        <t t-if="documents">
+            <br/>
+            <t t-if="len(documents)>1">
+                Here are some additional documents that may interest you:
+            </t>
+            <t t-else="">
+                Here is an additional document that may interest you:
+            </t>
+            <ul style="margin-bottom: 0;">
+                <t t-foreach="documents" t-as="document">
+                    <li style="font-size: 13px;">
+                        <a t-out="document.ir_attachment_id.name"
+                            t-att-href="object.get_portal_url('/document/' + str(document.id))"
+                            t-att-target="target"/>
+                    </li>
+                </t>
+            </ul>
+        </t>
+        <br/>
+        Please reply directly to this email with any questions or to confirm this <t t-out="doc_name or ''">quotation</t>.
+        <t t-if="not is_html_empty(object.user_id.signature)">
+            <div style="margin-top: 12px;">--<br/><t t-out="object.user_id.signature or ''">Mitchell Admin</t></div>
+        </t>
+    </p>
+</div>
+        </field>
+    </record>
+</odoo>

@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+        Website + shared frontend debrand.
+
+        "Powered by Odoo" in the website footer is rendered by:
+          web.brand_promotion           - wrapper div, called from
+                                          web.frontend_layout's footer
+            -> web.brand_promotion_message - leaf that outputs the
+                                             "Powered by %s%s" string
+                                             with the embedded Odoo logo
+
+        We CANNOT replace web.brand_promotion's contents - multiple
+        children xpath into it:
+          * website.brand_promotion (regular inherit -> same tree)
+          * website_sale templates (regular inherit -> same tree)
+          * planning.brand_promotion (primary inherit -> separate tree
+            but still validated at parse time against parent)
+        Removing the <t t-call="web.brand_promotion_message"/> inside
+        the wrapper breaks all of those at module-upgrade view
+        validation time.
+
+        Target the leaf instead. web.brand_promotion_message has NO
+        children inheriting from it (verified by grep across all
+        Odoo + enterprise addons), so we can safely strip its output.
+        The wrapper still calls the template - it just renders nothing.
+    -->
+    <template id="cw_brand_promotion_message_debrand"
+              inherit_id="web.brand_promotion_message"
+              name="CW Debrand: blank out 'Powered by Odoo' message">
+        <xpath expr="//t[@t-out]" position="replace">
+            <!--
+                removed: <t t-out="final_message % (odoo_logo, ...)"/>
+                That was the only render statement in the template.
+                Killing it removes the "Powered by " text AND the
+                embedded Odoo logo image at the same time.
+                The two t-set statements above (odoo_logo, final_message)
+                stay but become inert - they only get evaluated when
+                referenced, which now no one does.
+            -->
+        </xpath>
+    </template>
+</odoo>

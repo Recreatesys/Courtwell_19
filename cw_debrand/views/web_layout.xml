@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+        web.layout (web/views/webclient_templates.xml line ~17) is the
+        root HTML wrapper used by every Odoo page (backend, website,
+        portal, login). Two debrand targets here:
+
+          1. <title t-esc="title or 'Odoo'"/> - default browser tab
+             title when no specific title is supplied. Swap fallback
+             from 'Odoo' to 'Courtwell'.
+
+          2. <link rel="shortcut icon"
+                   t-att-href="x_icon or '/web/static/img/favicon.ico'"/>
+             Default favicon path. When the website module is
+             installed (always true here), website.favicon binary
+             field is the canonical favicon slot. Setting the
+             fallback to /web/image/website/1/favicon means: upload
+             ONE favicon via Settings > Websites > Favicon and every
+             surface (backend, login, portal, website) picks it up.
+             Until something is uploaded, /web/image returns Odoo's
+             placeholder image (a generic icon) - acceptable.
+    -->
+    <template id="cw_web_layout_debrand"
+              inherit_id="web.layout"
+              name="CW Debrand: replace default title 'Odoo' and favicon">
+        <xpath expr="//title" position="replace">
+            <title t-esc="title or 'Courtwell'"/>
+        </xpath>
+        <xpath expr="//link[@rel='shortcut icon']" position="attributes">
+            <attribute name="t-att-href">x_icon or '/web/image/website/1/favicon'</attribute>
+        </xpath>
+    </template>
+</odoo>
