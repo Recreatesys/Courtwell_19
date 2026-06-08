@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="0">
+
+        <!--
+            Top-level "Inspections" menu. Visible to QC inspectors,
+            reviewers, and admin. A pure-QC user with no other app
+            groups will see ONLY this menu in Odoo (and only the QC
+            sub-menu below).
+        -->
+        <menuitem id="menu_root_inspections"
+                  name="Inspections"
+                  sequence="55"
+                  groups="cw_sourcing_inspection.group_qc_inspector,cw_sourcing_inspection.group_qc_reviewer,base.group_system"/>
+
+        <!--
+            QC sub-menu — opens the simplified QC form, filtered to
+            this user's own inspections. Visible to QC inspectors and
+            reviewers (reviewers may also do field work).
+        -->
+        <menuitem id="menu_inspection_my_qc"
+                  name="My QC Inspections"
+                  parent="menu_root_inspections"
+                  action="action_sourcing_inspection_qc"
+                  sequence="10"
+                  groups="cw_sourcing_inspection.group_qc_inspector,cw_sourcing_inspection.group_qc_reviewer,base.group_system"/>
+
+        <!--
+            Reviewer sub-menu — full form, filtered to inspections
+            awaiting THIS user's review. Hidden from pure QC users.
+        -->
+        <menuitem id="menu_inspection_to_review"
+                  name="Inspections to Review"
+                  parent="menu_root_inspections"
+                  action="action_sourcing_inspection_review"
+                  sequence="20"
+                  groups="cw_sourcing_inspection.group_qc_reviewer,base.group_system"/>
+
+        <!--
+            All inspections — admin / manager visibility across the
+            whole pipeline. Hidden from pure QC users.
+        -->
+        <menuitem id="menu_inspection_all"
+                  name="All Inspections"
+                  parent="menu_root_inspections"
+                  action="action_sourcing_inspection"
+                  sequence="30"
+                  groups="cw_sourcing_inspection.group_qc_reviewer,base.group_system"/>
+
+        <!--
+            QC Dashboard — graph/pivot/kanban entry point for the
+            reviewer-and-up audience. Hidden from pure QC.
+        -->
+        <menuitem id="menu_inspection_dashboard"
+                  name="QC Dashboard"
+                  parent="menu_root_inspections"
+                  action="action_sourcing_inspection_dashboard"
+                  sequence="40"
+                  groups="cw_sourcing_inspection.group_qc_reviewer,base.group_system"/>
+
+    </data>
+</odoo>

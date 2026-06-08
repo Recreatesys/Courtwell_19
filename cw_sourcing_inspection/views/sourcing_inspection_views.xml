@@ -1,0 +1,738 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!--
+        Form view — laid out to mirror the paper QC form's structure:
+        Header (parties + dates), then 6 inspection-category groups
+        with their sub-item booleans + per-section pass/fail, then
+        the SKU detail grid, comments, final outcome, and workflow.
+    -->
+    <record id="view_sourcing_inspection_form" model="ir.ui.view">
+        <field name="name">sourcing.inspection.form</field>
+        <field name="model">sourcing.inspection</field>
+        <field name="arch" type="xml">
+            <form string="Sourcing Inspection">
+                <header>
+                    <button name="action_schedule" type="object"
+                            string="Schedule" class="btn-secondary"
+                            invisible="state != 'draft'"/>
+                    <button name="action_start" type="object"
+                            string="Start Inspection" class="btn-primary"
+                            invisible="state not in ('draft', 'scheduled')"/>
+                    <button name="action_submit_to_merchandiser" type="object"
+                            string="Submit to Merchandiser" class="btn-primary"
+                            invisible="state not in ('draft', 'scheduled', 'in_progress')"
+                            confirm="Submit this inspection to the assigned merchandiser for same-day review? Make sure the outcome is set."/>
+                    <!-- Merchandiser decision buttons — shown only on submitted -->
+                    <button name="action_decision_load" type="object"
+                            string="Load for Shipping" class="btn-success"
+                            invisible="state != 'submitted'"
+                            groups="cw_sourcing_inspection.group_qc_reviewer"
+                            confirm="Approve loading of the inspected goods? This closes the inspection and clears it for shipping."/>
+                    <button name="action_decision_hold" type="object"
+                            string="Hold" class="btn-warning"
+                            invisible="state != 'submitted'"
+                            groups="cw_sourcing_inspection.group_qc_reviewer"
+                            confirm="Hold loading? Goods will not be cleared for shipping until further review."/>
+                    <button name="action_decision_reject" type="object"
+                            string="Reject Loading" class="btn-danger"
+                            invisible="state != 'submitted'"
+                            groups="cw_sourcing_inspection.group_qc_reviewer"
+                            confirm="Reject loading? Goods will be blocked from shipping. Add notes explaining the rejection."/>
+                    <button name="action_send_back_to_qc" type="object"
+                            string="Send Back to QC" class="btn-secondary"
+                            invisible="state != 'submitted'"
+                            groups="cw_sourcing_inspection.group_qc_reviewer"/>
+                    <!-- Admin / back-compat: legacy Complete button bypasses review -->
+                    <button name="action_complete" type="object"
+                            string="Complete (skip review)"
+                            invisible="state not in ('in_progress', 'scheduled')"
+                            groups="base.group_system"
+                            confirm="Mark completed without merchandiser review? Admins only."/>
+                    <button name="action_create_reinspection" type="object"
+                            string="Create Re-Inspection" class="btn-secondary"
+                            invisible="state != 'completed' or final_outcome not in ('fail', 'rework')"/>
+                    <button name="%(action_report_sourcing_inspection)d"
+                            type="action"
+                            string="Print QC Report (中英文)"
+                            class="btn-secondary"
+                            invisible="state == 'draft'"/>
+                    <button name="action_cancel" type="object"
+                            string="Cancel"
+                            invisible="state in ('completed', 'cancelled')"/>
+                    <button name="action_reset_to_draft" type="object"
+                            string="Reset to Draft"
+                            invisible="state != 'cancelled'"/>
+                    <field name="state" widget="statusbar"
+                           statusbar_visible="draft,scheduled,in_progress,submitted,completed"/>
+                </header>
+                <sheet>
+                    <div class="oe_button_box" name="button_box">
+                        <button name="action_view_reinspections" type="object"
+                                class="oe_stat_button" icon="fa-history"
+                                invisible="reinspection_count == 0">
+                            <field name="reinspection_count" widget="statinfo"
+                                   string="Re-Inspections"/>
+                        </button>
+                        <button name="action_view_inspection_expense"
+                                type="object"
+                                class="oe_stat_button" icon="fa-money"
+                                invisible="not inspection_expense_id">
+                            <div class="o_field_widget o_stat_info">
+                                <span class="o_stat_text">Cost</span>
+                                <span class="o_stat_value">Posted</span>
+                            </div>
+                        </button>
+                    </div>
+                    <div class="oe_title">
+                        <label for="name" string="Reference"/>
+                        <h1><field name="name" readonly="1"/></h1>
+                    </div>
+
+                    <!-- ===== Header parties + dates ===== -->
+                    <group>
+                        <group string="Inspection">
+                            <field name="inspection_type"/>
+                            <field name="contract_number"
+                                   placeholder="e.g. BC-1096"/>
+                            <field name="inspection_date"/>
+                            <field name="parent_inspection_id"
+                                   invisible="inspection_type != 'reinspect'"
+                                   options="{'no_create': True}"/>
+                        </group>
+                        <group string="Parties">
+                            <field name="supplier_id"
+                                   options="{'no_create': True}"/>
+                            <field name="factory_name"
+                                   placeholder="e.g. Zhang Laojun Lighting"/>
+                            <field name="factory_address"/>
+                            <field name="factory_contact_name"
+                                   placeholder="e.g. Li Yahui"/>
+                            <field name="inspector_user_id"/>
+                            <field name="inspector_partner_id"
+                                   options="{'no_create': True}"/>
+                        </group>
+                    </group>
+
+                    <!-- ===== Commercial linkage (reviewer-only) ===== -->
+                    <group string="Linkage" groups="cw_sourcing_inspection.group_qc_reviewer,base.group_system">
+                        <group>
+                            <field name="purchase_order_id"
+                                   options="{'no_create': True}"/>
+                            <field name="sale_order_id"
+                                   options="{'no_create': True}"/>
+                            <field name="merchandiser_user_id"
+                                   options="{'no_create': True}"/>
+                        </group>
+                        <group>
+                            <field name="project_id"
+                                   options="{'no_create': True}"/>
+                            <label for="inspection_cost"/>
+                            <div class="o_row">
+                                <field name="inspection_cost"
+                                       readonly="cost_posted"/>
+                                <button name="action_post_inspection_cost"
+                                        type="object"
+                                        string="Post Cost"
+                                        class="btn-secondary btn-sm"
+                                        invisible="cost_posted or inspection_cost &lt;= 0"
+                                        confirm="Post this inspection cost as an hr.expense against the linked project analytic account?"/>
+                                <button name="action_reset_inspection_cost"
+                                        type="object"
+                                        string="Reset Cost"
+                                        class="btn-link btn-sm"
+                                        invisible="not cost_posted"
+                                        confirm="Delete the linked expense (if still draft) and unlock the cost field?"/>
+                            </div>
+                            <field name="cost_posted" readonly="1"
+                                   widget="boolean_toggle"
+                                   invisible="not cost_posted"/>
+                            <field name="currency_id" invisible="1"/>
+                            <field name="inspection_expense_id" invisible="1"/>
+                        </group>
+                    </group>
+
+                    <!-- ===== Same-day review banner ===== -->
+                    <div class="alert alert-warning" role="alert"
+                         invisible="state != 'submitted' or not is_overdue_review">
+                        <strong>Overdue Review.</strong>
+                        QC submitted this inspection on
+                        <field name="qc_submitted_at" readonly="1" nolabel="1"/>
+                        — decide on loading today.
+                    </div>
+                    <div class="alert alert-info" role="alert"
+                         invisible="state != 'submitted' or is_overdue_review">
+                        <strong>Pending Merchandiser Review.</strong>
+                        Submitted by QC on
+                        <field name="qc_submitted_at" readonly="1" nolabel="1"/>.
+                        Reviewer:
+                        <field name="merchandiser_user_id" readonly="1" nolabel="1"/>.
+                    </div>
+
+                    <notebook>
+
+                        <!-- ===== Checklists ===== -->
+                        <page name="checklists" string="Inspection Checklists">
+
+                            <separator string="1. Carton Inspection (紙箱檢驗)"/>
+                            <group>
+                                <group>
+                                    <field name="carton_check_shipping_marks"/>
+                                    <field name="carton_check_paper_quality"/>
+                                    <field name="carton_check_size_deviation"/>
+                                </group>
+                                <group>
+                                    <field name="carton_check_barcode"/>
+                                    <field name="carton_check_sealing"/>
+                                    <field name="carton_check_appearance"/>
+                                </group>
+                            </group>
+                            <group>
+                                <field name="carton_result" widget="radio"
+                                       options="{'horizontal': true}"/>
+                            </group>
+
+                            <separator string="2. Packaging Inspection (包裝檢驗)"/>
+                            <group>
+                                <group>
+                                    <field name="packaging_check_method"/>
+                                    <field name="packaging_check_protection"/>
+                                    <field name="packaging_check_material"/>
+                                </group>
+                                <group>
+                                    <field name="packaging_check_color_card"/>
+                                    <field name="packaging_check_quantity"/>
+                                </group>
+                            </group>
+                            <group>
+                                <field name="packaging_result" widget="radio"
+                                       options="{'horizontal': true}"/>
+                            </group>
+
+                            <separator string="3. Accessories Inspection (配件檢驗)"/>
+                            <group>
+                                <group>
+                                    <field name="accessories_check_nameplate"/>
+                                    <field name="accessories_check_hangtag"/>
+                                    <field name="accessories_check_origin_label"/>
+                                </group>
+                                <group>
+                                    <field name="accessories_check_position"/>
+                                    <field name="accessories_check_manual"/>
+                                    <field name="accessories_check_accessories"/>
+                                </group>
+                            </group>
+                            <group>
+                                <field name="accessories_result" widget="radio"
+                                       options="{'horizontal': true}"/>
+                            </group>
+
+                            <separator string="4. Component Testing (分件檢測)"/>
+                            <group>
+                                <group>
+                                    <field name="component_check_quantity"/>
+                                    <field name="component_check_material"/>
+                                    <field name="component_check_dimensions"/>
+                                </group>
+                                <group>
+                                    <field name="component_check_color_matching"/>
+                                    <field name="component_check_other"/>
+                                </group>
+                            </group>
+                            <group>
+                                <field name="component_result" widget="radio"
+                                       options="{'horizontal': true}"/>
+                            </group>
+
+                            <separator string="5. Structural Testing (結構檢測)"/>
+                            <group>
+                                <group>
+                                    <field name="structural_check_structure"/>
+                                </group>
+                                <group>
+                                    <field name="structural_check_function"/>
+                                </group>
+                            </group>
+                            <group>
+                                <field name="structural_result" widget="radio"
+                                       options="{'horizontal': true}"/>
+                            </group>
+
+                            <separator string="6. Overall Inspection (整體檢測)"/>
+                            <group>
+                                <group>
+                                    <field name="overall_check_overall"/>
+                                </group>
+                                <group>
+                                    <field name="overall_check_appearance"/>
+                                </group>
+                            </group>
+                            <group>
+                                <field name="overall_result" widget="radio"
+                                       options="{'horizontal': true}"/>
+                            </group>
+
+                            <separator string="Other Inspection / Notes"/>
+                            <group>
+                                <field name="other_notes" nolabel="1"/>
+                                <field name="other_result" widget="radio"
+                                       options="{'horizontal': true}"/>
+                            </group>
+                        </page>
+
+                        <!-- ===== Per-SKU detail grid ===== -->
+                        <page name="sku_lines" string="SKU Detail Grid">
+                            <field name="sku_line_ids">
+                                <list editable="bottom">
+                                    <field name="sequence" widget="handle"/>
+                                    <field name="item_code"/>
+                                    <field name="product_id"
+                                           options="{'no_create': True}"
+                                           optional="show"/>
+                                    <field name="description" optional="show"/>
+                                    <field name="ordered_qty"/>
+                                    <field name="sampled_qty"/>
+                                    <field name="quality_pass"
+                                           widget="boolean_toggle"/>
+                                    <field name="immediate_repair"
+                                           widget="boolean_toggle"/>
+                                    <field name="not_repairable"
+                                           widget="boolean_toggle"/>
+                                    <field name="notes" optional="hide"/>
+                                </list>
+                            </field>
+                        </page>
+
+                        <!-- ===== Comments + outcome ===== -->
+                        <page name="comments" string="Comments &amp; Outcome">
+                            <separator string="Inspection Comments / Issues"/>
+                            <field name="inspection_comments" nolabel="1"
+                                   placeholder="Free text: findings, measured-vs-spec deltas, anything not captured in the checklists."/>
+
+                            <separator string="Improvement Notes"/>
+                            <field name="improvement_notes" nolabel="1"
+                                   placeholder="Free text: recommended actions, follow-ups, lessons for next batch."/>
+
+                            <separator string="Final Outcome (QC)"/>
+                            <group>
+                                <group>
+                                    <field name="final_outcome" widget="radio"
+                                           options="{'horizontal': true}"/>
+                                </group>
+                                <group>
+                                    <field name="bulk_completion_pct"
+                                           widget="percentage"/>
+                                </group>
+                            </group>
+                        </page>
+
+                        <!-- ===== Photos (phone-captured) ===== -->
+                        <page name="photos" string="Photos">
+                            <field name="inspection_photo_ids"
+                                   widget="many2many_binary"
+                                   string="Inspection Photos"/>
+                            <div class="text-muted">
+                                <p>Tap the paperclip / "+" button on the mobile app to capture photos directly from the phone camera, or pick existing photos from the gallery. Multiple uploads supported.</p>
+                            </div>
+                        </page>
+
+                        <!-- ===== Merchandiser Review (reviewer-only) ===== -->
+                        <page name="merchandiser_review"
+                              string="Merchandiser Review"
+                              groups="cw_sourcing_inspection.group_qc_reviewer,base.group_system">
+                            <group>
+                                <group string="Decision">
+                                    <field name="merchandiser_decision"
+                                           widget="radio"
+                                           readonly="state != 'submitted'"/>
+                                    <field name="merchandiser_review_date"
+                                           readonly="1"/>
+                                    <field name="is_overdue_review"
+                                           readonly="1"
+                                           widget="boolean_toggle"
+                                           invisible="state != 'submitted'"/>
+                                </group>
+                                <group string="QC Submission">
+                                    <field name="qc_submitted_at" readonly="1"/>
+                                    <field name="inspector_user_id" readonly="1"/>
+                                </group>
+                            </group>
+                            <separator string="Reviewer Notes"/>
+                            <field name="merchandiser_review_notes" nolabel="1"
+                                   placeholder="Comments for QC, justification for hold/reject, or any context for the loading decision."/>
+                        </page>
+
+                    </notebook>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <!--
+        QC-simplified form variant — designed for phone use by field QC.
+        Strips out PO/SO/project/cost/merchandiser-decision fields.
+        Photos tab leads (prominent for camera capture). Submit button
+        is the single primary action.
+
+        Selected via the "My QC Inspections" action below, which has
+        view_id pointing to this view.
+    -->
+    <record id="view_sourcing_inspection_form_qc" model="ir.ui.view">
+        <field name="name">sourcing.inspection.form.qc</field>
+        <field name="model">sourcing.inspection</field>
+        <field name="priority">99</field>
+        <field name="arch" type="xml">
+            <form string="QC Inspection">
+                <header>
+                    <button name="action_start" type="object"
+                            string="Start" class="btn-primary"
+                            invisible="state not in ('draft', 'scheduled')"/>
+                    <button name="action_submit_to_merchandiser"
+                            type="object"
+                            string="Submit to Merchandiser"
+                            class="btn-primary"
+                            invisible="state not in ('draft', 'scheduled', 'in_progress')"
+                            confirm="Submit this inspection? Once submitted you can't edit it without it being sent back by the merchandiser."/>
+                    <field name="state" widget="statusbar"
+                           statusbar_visible="draft,in_progress,submitted,completed"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <label for="name" string="Reference"/>
+                        <h1><field name="name" readonly="1"/></h1>
+                    </div>
+
+                    <group>
+                        <group>
+                            <field name="inspection_type"/>
+                            <field name="contract_number"
+                                   placeholder="e.g. BC-1096"/>
+                            <field name="inspection_date"/>
+                        </group>
+                        <group>
+                            <field name="supplier_id"
+                                   options="{'no_create': True}"/>
+                            <field name="factory_name"/>
+                            <field name="factory_contact_name"
+                                   placeholder="Factory person in charge"/>
+                            <field name="inspector_user_id" readonly="1"/>
+                        </group>
+                    </group>
+
+                    <notebook>
+                        <!-- Photos first — primary action on phone -->
+                        <page name="qc_photos" string="Photos">
+                            <field name="inspection_photo_ids"
+                                   widget="many2many_binary"
+                                   string="Inspection Photos"/>
+                            <div class="text-muted">
+                                <p>Tap the paperclip / "+" button to capture photos directly from the camera. Take as many as you need.</p>
+                            </div>
+                        </page>
+
+                        <!-- Checklists -->
+                        <page name="qc_checklists" string="Checklists">
+
+                            <separator string="1. Carton Inspection"/>
+                            <group>
+                                <group>
+                                    <field name="carton_check_shipping_marks"/>
+                                    <field name="carton_check_paper_quality"/>
+                                    <field name="carton_check_size_deviation"/>
+                                </group>
+                                <group>
+                                    <field name="carton_check_barcode"/>
+                                    <field name="carton_check_sealing"/>
+                                    <field name="carton_check_appearance"/>
+                                </group>
+                            </group>
+                            <field name="carton_result" widget="radio"
+                                   options="{'horizontal': true}"/>
+
+                            <separator string="2. Packaging Inspection"/>
+                            <group>
+                                <group>
+                                    <field name="packaging_check_method"/>
+                                    <field name="packaging_check_protection"/>
+                                    <field name="packaging_check_material"/>
+                                </group>
+                                <group>
+                                    <field name="packaging_check_color_card"/>
+                                    <field name="packaging_check_quantity"/>
+                                </group>
+                            </group>
+                            <field name="packaging_result" widget="radio"
+                                   options="{'horizontal': true}"/>
+
+                            <separator string="3. Accessories Inspection"/>
+                            <group>
+                                <group>
+                                    <field name="accessories_check_nameplate"/>
+                                    <field name="accessories_check_hangtag"/>
+                                    <field name="accessories_check_origin_label"/>
+                                </group>
+                                <group>
+                                    <field name="accessories_check_position"/>
+                                    <field name="accessories_check_manual"/>
+                                    <field name="accessories_check_accessories"/>
+                                </group>
+                            </group>
+                            <field name="accessories_result" widget="radio"
+                                   options="{'horizontal': true}"/>
+
+                            <separator string="4. Component Testing"/>
+                            <group>
+                                <group>
+                                    <field name="component_check_quantity"/>
+                                    <field name="component_check_material"/>
+                                    <field name="component_check_dimensions"/>
+                                </group>
+                                <group>
+                                    <field name="component_check_color_matching"/>
+                                    <field name="component_check_other"/>
+                                </group>
+                            </group>
+                            <field name="component_result" widget="radio"
+                                   options="{'horizontal': true}"/>
+
+                            <separator string="5. Structural Testing"/>
+                            <group>
+                                <group>
+                                    <field name="structural_check_structure"/>
+                                </group>
+                                <group>
+                                    <field name="structural_check_function"/>
+                                </group>
+                            </group>
+                            <field name="structural_result" widget="radio"
+                                   options="{'horizontal': true}"/>
+
+                            <separator string="6. Overall Inspection"/>
+                            <group>
+                                <group>
+                                    <field name="overall_check_overall"/>
+                                </group>
+                                <group>
+                                    <field name="overall_check_appearance"/>
+                                </group>
+                            </group>
+                            <field name="overall_result" widget="radio"
+                                   options="{'horizontal': true}"/>
+
+                            <separator string="Other / Notes"/>
+                            <field name="other_notes" nolabel="1"/>
+                            <field name="other_result" widget="radio"
+                                   options="{'horizontal': true}"/>
+                        </page>
+
+                        <!-- Per-SKU grid -->
+                        <page name="qc_sku" string="SKU Detail">
+                            <field name="sku_line_ids">
+                                <list editable="bottom">
+                                    <field name="sequence" widget="handle"/>
+                                    <field name="item_code"/>
+                                    <field name="description"/>
+                                    <field name="ordered_qty"/>
+                                    <field name="sampled_qty"/>
+                                    <field name="quality_pass"
+                                           widget="boolean_toggle"/>
+                                    <field name="immediate_repair"
+                                           widget="boolean_toggle"/>
+                                    <field name="not_repairable"
+                                           widget="boolean_toggle"/>
+                                </list>
+                            </field>
+                        </page>
+
+                        <!-- Comments + outcome -->
+                        <page name="qc_comments" string="Comments &amp; Outcome">
+                            <separator string="Issues / Findings"/>
+                            <field name="inspection_comments" nolabel="1"
+                                   placeholder="What did you find? Measurement deltas, defects, anything not in the checklists."/>
+                            <separator string="Improvement Notes"/>
+                            <field name="improvement_notes" nolabel="1"
+                                   placeholder="Recommended actions, follow-ups."/>
+                            <separator string="Final Outcome"/>
+                            <group>
+                                <group>
+                                    <field name="final_outcome" widget="radio"
+                                           options="{'horizontal': true}"/>
+                                </group>
+                                <group>
+                                    <field name="bulk_completion_pct"
+                                           widget="percentage"/>
+                                </group>
+                            </group>
+                        </page>
+                    </notebook>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <!--
+        List view — shows date, type, supplier, contract, project,
+        final outcome, state. Outcome decorated for quick visual scan.
+    -->
+    <record id="view_sourcing_inspection_list" model="ir.ui.view">
+        <field name="name">sourcing.inspection.list</field>
+        <field name="model">sourcing.inspection</field>
+        <field name="arch" type="xml">
+            <list string="Inspections"
+                  decoration-success="final_outcome == 'pass'"
+                  decoration-warning="final_outcome == 'rework' or final_outcome == 'pending'"
+                  decoration-danger="final_outcome == 'fail' or is_overdue_review"
+                  decoration-bf="state == 'submitted'">
+                <field name="name"/>
+                <field name="inspection_date"/>
+                <field name="inspection_type"/>
+                <field name="contract_number"/>
+                <field name="supplier_id"/>
+                <field name="factory_name" optional="hide"/>
+                <field name="project_id" optional="show"/>
+                <field name="inspector_user_id"/>
+                <field name="merchandiser_user_id" optional="show"/>
+                <field name="final_outcome"/>
+                <field name="merchandiser_decision" optional="show"/>
+                <field name="qc_submitted_at" optional="hide"/>
+                <field name="bulk_completion_pct" widget="percentage" optional="hide"/>
+                <field name="is_overdue_review" invisible="1"/>
+                <field name="state"/>
+            </list>
+        </field>
+    </record>
+
+    <!--
+        Search + filters + group-by
+    -->
+    <record id="view_sourcing_inspection_search" model="ir.ui.view">
+        <field name="name">sourcing.inspection.search</field>
+        <field name="model">sourcing.inspection</field>
+        <field name="arch" type="xml">
+            <search string="Inspections">
+                <field name="name"/>
+                <field name="contract_number"/>
+                <field name="supplier_id"/>
+                <field name="project_id"/>
+                <field name="inspector_user_id"/>
+                <field name="inspection_date"/>
+                <separator/>
+                <filter name="filter_pass" string="Pass"
+                        domain="[('final_outcome', '=', 'pass')]"/>
+                <filter name="filter_rework" string="Rework"
+                        domain="[('final_outcome', '=', 'rework')]"/>
+                <filter name="filter_fail" string="Fail"
+                        domain="[('final_outcome', '=', 'fail')]"/>
+                <filter name="filter_pending" string="Pending"
+                        domain="[('final_outcome', '=', 'pending')]"/>
+                <separator/>
+                <filter name="filter_state_open"
+                        string="Open (not Completed/Cancelled)"
+                        domain="[('state', 'not in', ['completed', 'cancelled'])]"/>
+                <filter name="filter_state_completed" string="Completed"
+                        domain="[('state', '=', 'completed')]"/>
+                <separator/>
+                <filter name="filter_my_qc" string="My QC Inspections"
+                        domain="[('inspector_user_id', '=', uid)]"/>
+                <filter name="filter_my_reviews" string="To Review (Me)"
+                        domain="[('merchandiser_user_id', '=', uid),
+                                 ('state', '=', 'submitted')]"/>
+                <filter name="filter_overdue" string="Overdue Reviews"
+                        domain="[('is_overdue_review', '=', True)]"/>
+                <filter name="filter_submitted" string="All Submitted (any reviewer)"
+                        domain="[('state', '=', 'submitted')]"/>
+                <separator/>
+                <filter name="group_supplier" string="Supplier"
+                        context="{'group_by': 'supplier_id'}"/>
+                <filter name="group_project" string="Project"
+                        context="{'group_by': 'project_id'}"/>
+                <filter name="group_outcome" string="Outcome"
+                        context="{'group_by': 'final_outcome'}"/>
+                <filter name="group_type" string="Type"
+                        context="{'group_by': 'inspection_type'}"/>
+                <filter name="group_inspector" string="Inspector"
+                        context="{'group_by': 'inspector_user_id'}"/>
+                <filter name="group_state" string="State"
+                        context="{'group_by': 'state'}"/>
+            </search>
+        </field>
+    </record>
+
+    <!--
+        Window action
+    -->
+    <record id="action_sourcing_inspection" model="ir.actions.act_window">
+        <field name="name">All Inspections</field>
+        <field name="res_model">sourcing.inspection</field>
+        <field name="view_mode">list,form</field>
+        <field name="context">{'search_default_filter_state_open': 1}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Record your first inspection.
+            </p>
+            <p>
+                Pre-shipment, DUPRO, factory audit, loading supervision,
+                or lab-test inspections — replaces the paper QC form
+                with structured data linkable to your projects and POs.
+            </p>
+        </field>
+    </record>
+
+    <!--
+        QC-Inspector action — opens the SIMPLIFIED QC form by default
+        (view_id pinned), filters to only this user's assigned
+        inspections, and defaults the inspector on create.
+    -->
+    <record id="action_sourcing_inspection_qc" model="ir.actions.act_window">
+        <field name="name">My QC Inspections</field>
+        <field name="res_model">sourcing.inspection</field>
+        <field name="view_mode">list,form</field>
+        <field name="view_id" ref="view_sourcing_inspection_list"/>
+        <field name="context">{
+            'search_default_filter_my_qc': 1,
+            'default_inspector_user_id': uid,
+            'form_view_ref': 'cw_sourcing_inspection.view_sourcing_inspection_form_qc',
+        }</field>
+        <field name="domain">[('inspector_user_id', '=', uid)]</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                No inspections assigned to you yet.
+            </p>
+            <p>
+                When a merchandiser assigns you a new inspection it
+                appears here. Open it on your phone, fill in the
+                checklists, take photos with the camera, set the
+                outcome, and Submit to the Merchandiser.
+            </p>
+        </field>
+    </record>
+
+    <!--
+        Reviewer action — opens the FULL form, filtered to inspections
+        assigned to this user that are awaiting their review.
+    -->
+    <record id="action_sourcing_inspection_review" model="ir.actions.act_window">
+        <field name="name">Inspections to Review</field>
+        <field name="res_model">sourcing.inspection</field>
+        <field name="view_mode">list,form</field>
+        <field name="context">{
+            'search_default_filter_my_reviews': 1,
+            'search_default_filter_overdue': 0,
+        }</field>
+        <field name="domain">[('merchandiser_user_id', '=', uid)]</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                No inspections waiting for your review.
+            </p>
+            <p>
+                When QC submits an inspection assigned to you, it shows
+                up here with a same-day activity. Review it and set the
+                Loading Decision: <b>Load for Shipping</b>, <b>Hold</b>,
+                or <b>Reject Loading</b>.
+            </p>
+        </field>
+    </record>
+
+</odoo>

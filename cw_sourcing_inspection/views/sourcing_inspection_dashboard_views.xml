@@ -1,0 +1,186 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!--
+        Dashboard / analytical views for sourcing.inspection.
+
+        These views are referenced by the actions and menu in the main
+        views file. They extend the existing actions (list + form) with
+        kanban, graph, pivot, and calendar so the QC team and managers
+        can see workload, trends, and pass rates at a glance.
+    -->
+
+    <!--
+        Kanban — useful for state-flow visibility (Draft / In Progress /
+        Submitted / Completed). Groups by state by default; cards show
+        the outcome decoration so failing/holding inspections jump out.
+    -->
+    <record id="view_sourcing_inspection_kanban" model="ir.ui.view">
+        <field name="name">sourcing.inspection.kanban</field>
+        <field name="model">sourcing.inspection</field>
+        <field name="arch" type="xml">
+            <kanban default_group_by="state"
+                    quick_create="false"
+                    sample="1">
+                <field name="name"/>
+                <field name="inspection_date"/>
+                <field name="supplier_id"/>
+                <field name="contract_number"/>
+                <field name="inspector_user_id"/>
+                <field name="merchandiser_user_id"/>
+                <field name="final_outcome"/>
+                <field name="merchandiser_decision"/>
+                <field name="is_overdue_review"/>
+                <field name="state"/>
+                <templates>
+                    <t t-name="card">
+                        <div t-attf-class="oe_kanban_card #{record.is_overdue_review.raw_value ? 'oe_kanban_color_2' : ''}">
+                            <div class="o_kanban_record_top mb8">
+                                <div class="o_kanban_record_headings">
+                                    <strong class="o_kanban_record_title">
+                                        <field name="name"/>
+                                    </strong>
+                                    <small class="o_kanban_record_subtitle text-muted">
+                                        <field name="contract_number"/>
+                                    </small>
+                                </div>
+                            </div>
+                            <div class="o_kanban_record_body">
+                                <div t-if="record.supplier_id.value">
+                                    <i class="fa fa-industry me-1"/>
+                                    <field name="supplier_id"/>
+                                </div>
+                                <div t-if="record.inspection_date.value">
+                                    <i class="fa fa-calendar me-1"/>
+                                    <field name="inspection_date"/>
+                                </div>
+                                <div t-if="record.final_outcome.raw_value"
+                                     class="mt-1">
+                                    <span t-attf-class="badge #{
+                                            record.final_outcome.raw_value === 'pass' ? 'text-bg-success' :
+                                            record.final_outcome.raw_value === 'fail' ? 'text-bg-danger' :
+                                            'text-bg-warning'}">
+                                        <field name="final_outcome"/>
+                                    </span>
+                                    <span t-if="record.merchandiser_decision.raw_value"
+                                          t-attf-class="badge ms-1 #{
+                                            record.merchandiser_decision.raw_value === 'load_for_shipping' ? 'text-bg-success' :
+                                            record.merchandiser_decision.raw_value === 'reject_load' ? 'text-bg-danger' :
+                                            'text-bg-warning'}">
+                                        <field name="merchandiser_decision"/>
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="o_kanban_record_bottom">
+                                <div class="oe_kanban_bottom_left">
+                                    <small t-if="record.inspector_user_id.value">
+                                        QC: <field name="inspector_user_id"/>
+                                    </small>
+                                </div>
+                                <div class="oe_kanban_bottom_right">
+                                    <small t-if="record.is_overdue_review.raw_value"
+                                           class="text-danger">
+                                        <i class="fa fa-exclamation-triangle"/>
+                                        Overdue
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                    </t>
+                </templates>
+            </kanban>
+        </field>
+    </record>
+
+    <!--
+        Graph view — count of inspections by month, stacked by outcome.
+        Default measure is record count; flip to inspection_cost or
+        bulk_completion_pct for cost/completion trends.
+    -->
+    <record id="view_sourcing_inspection_graph" model="ir.ui.view">
+        <field name="name">sourcing.inspection.graph</field>
+        <field name="model">sourcing.inspection</field>
+        <field name="arch" type="xml">
+            <graph string="Inspection Trends" type="bar" stacked="1">
+                <field name="inspection_date" interval="month"/>
+                <field name="final_outcome"/>
+            </graph>
+        </field>
+    </record>
+
+    <!--
+        Pivot — multi-dimensional analysis. Default rows = Supplier,
+        columns = Outcome. User can drag in Inspector, Project, Type, etc.
+    -->
+    <record id="view_sourcing_inspection_pivot" model="ir.ui.view">
+        <field name="name">sourcing.inspection.pivot</field>
+        <field name="model">sourcing.inspection</field>
+        <field name="arch" type="xml">
+            <pivot string="Inspection Analysis">
+                <field name="supplier_id" type="row"/>
+                <field name="final_outcome" type="col"/>
+                <field name="inspection_cost" type="measure"/>
+            </pivot>
+        </field>
+    </record>
+
+    <!--
+        Calendar — inspections by inspection_date. Useful for scheduling
+        and seeing the upcoming-inspection workload.
+    -->
+    <record id="view_sourcing_inspection_calendar" model="ir.ui.view">
+        <field name="name">sourcing.inspection.calendar</field>
+        <field name="model">sourcing.inspection</field>
+        <field name="arch" type="xml">
+            <calendar string="Inspection Calendar"
+                      date_start="inspection_date"
+                      color="inspector_user_id"
+                      mode="month">
+                <field name="name"/>
+                <field name="supplier_id"/>
+                <field name="final_outcome"/>
+                <field name="state"/>
+            </calendar>
+        </field>
+    </record>
+
+    <!--
+        Dashboard action — opens with all view modes (kanban + list +
+        graph + pivot + calendar + form) so users can pivot/graph their
+        way through the data without switching apps.
+
+        Default search shows last 90 days so the trend graphs are
+        meaningful from day one without flooding with historic noise.
+    -->
+    <record id="action_sourcing_inspection_dashboard" model="ir.actions.act_window">
+        <field name="name">QC Dashboard</field>
+        <field name="res_model">sourcing.inspection</field>
+        <field name="view_mode">graph,pivot,kanban,calendar,list,form</field>
+        <field name="context">{
+            'search_default_filter_state_open': 0,
+            'search_default_group_outcome': 1
+        }</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                No inspection data yet — once inspections start flowing
+                through, this dashboard will populate.
+            </p>
+            <p>
+                Use the graph / pivot / calendar tabs to analyze pass rates,
+                inspector workload, supplier quality history, and cost
+                trends.
+            </p>
+        </field>
+    </record>
+
+    <!--
+        Extend the existing list/form action to also expose the new
+        view modes (kanban, graph, pivot, calendar). The action_id
+        already points at views via view_mode; we re-open with all
+        modes available.
+    -->
+    <record id="action_sourcing_inspection" model="ir.actions.act_window">
+        <field name="view_mode">list,kanban,form,graph,pivot,calendar</field>
+    </record>
+
+</odoo>

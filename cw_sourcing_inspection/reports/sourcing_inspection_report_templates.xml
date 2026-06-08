@@ -1,0 +1,369 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!--
+        Bilingual QC Inspection Report — Chinese (primary) + English
+        (secondary, smaller below or in parentheses), structured to
+        mirror Courtwell's existing paper QC form layout.
+
+        Font: WenQuanYi Micro Hei is installed on the Contabo server
+        (verified via fc-list). Listed first in the CSS font-family
+        chain to ensure consistent Chinese rendering in wkhtmltopdf;
+        falls back to Noto Sans CJK / Microsoft YaHei for other
+        deployments.
+    -->
+
+    <template id="report_sourcing_inspection_document">
+        <t t-call="web.html_container">
+            <t t-foreach="docs" t-as="o">
+                <t t-call="web.basic_layout">
+                    <div class="page" t-attf-style="{{ qc_root_style }}">
+
+                        <!-- ===== Inline CSS scoped to the report ===== -->
+                        <style>
+                            .qc-report {
+                                font-family: 'WenQuanYi Micro Hei', 'Noto Sans CJK SC', 'Microsoft YaHei', 'PingFang SC', sans-serif;
+                                font-size: 9.5pt;
+                                color: #000;
+                            }
+                            .qc-report h2 { margin: 0; font-size: 14pt; }
+                            .qc-report h3 { margin: 0; font-size: 11pt; letter-spacing: 1px; }
+                            .qc-report .firm-address { font-size: 8pt; line-height: 1.3; }
+                            .qc-report table { width: 100%; border-collapse: collapse; }
+                            .qc-report .meta-table td { padding: 3px 6px; border: 1px solid #555; font-size: 9.5pt; }
+                            .qc-report .meta-table .lbl { background: #eee; font-weight: bold; width: 14%; }
+                            .qc-report .legend { font-size: 8pt; padding: 4px 0; color: #555; }
+                            .qc-report .checklist td { border: 1px solid #555; padding: 4px 6px; vertical-align: middle; font-size: 9pt; }
+                            .qc-report .checklist .cat-name { background: #eee; font-weight: bold; width: 14%; }
+                            .qc-report .checklist .cat-items { width: 71%; }
+                            .qc-report .checklist .cat-result { width: 15%; text-align: center; font-weight: bold; }
+                            .qc-report .chk { display: inline-block; margin-right: 10px; white-space: nowrap; }
+                            .qc-report .chk-symbol { font-size: 11pt; vertical-align: middle; }
+                            .qc-report .pass { color: #2a7;  }
+                            .qc-report .fail { color: #c33; }
+                            .qc-report .neutral { color: #999; }
+                            .qc-report .sku-table th, .qc-report .sku-table td {
+                                border: 1px solid #555; padding: 4px 6px; font-size: 9pt; text-align: center;
+                            }
+                            .qc-report .sku-table th { background: #eee; }
+                            .qc-report .text-area {
+                                border: 1px solid #555; padding: 6px; min-height: 60px;
+                                white-space: pre-wrap; font-size: 9pt; margin-bottom: 8px;
+                            }
+                            .qc-report .outcome-bar {
+                                margin-top: 10px; padding: 10px; border: 2px solid #333;
+                                text-align: center; font-size: 12pt;
+                            }
+                            .qc-report .outcome-badge {
+                                display: inline-block; padding: 4px 14px;
+                                font-weight: bold; border: 2px solid #333; margin: 0 8px;
+                            }
+                            .qc-report .outcome-pass    { background: #d4f5dc; border-color: #2a7; }
+                            .qc-report .outcome-rework  { background: #fff4cc; border-color: #c93; }
+                            .qc-report .outcome-fail    { background: #fbd; border-color: #c33; }
+                            .qc-report .outcome-pending { background: #ddd; border-color: #888; }
+                            .qc-report .sig-table td {
+                                padding: 25px 6px 6px 6px; border-top: 1px solid #555;
+                                vertical-align: top; font-size: 9pt;
+                            }
+                            .qc-report .label-zh { font-weight: bold; }
+                            .qc-report .label-en { font-size: 8pt; color: #555; font-style: italic; }
+                            .qc-report .ref-id {
+                                font-family: 'Courier New', monospace;
+                                background: #eee; padding: 2px 6px; border: 1px solid #888;
+                            }
+                            .qc-report .firm-header { text-align: center; border-bottom: 2px solid #333; padding-bottom: 8px; margin-bottom: 10px; }
+                        </style>
+
+                        <div class="qc-report">
+
+                            <!-- ===== Firm Header ===== -->
+                            <div class="firm-header">
+                                <h2>國威國際有限公司</h2>
+                                <h3>COURTWELL INTERNATIONAL LTD.</h3>
+                                <div class="firm-address">
+                                    Flat C, 10/F., Kai Centre, 36 Hung To Road, Kwun Tong, Kowloon, Hong Kong<br/>
+                                    Tel: (852) 3797 5260 &#160;|&#160; Fax: (852) 3797 5264 &#160;|&#160; Email: courtwell@courtwell.com.hk
+                                </div>
+                            </div>
+
+                            <!-- ===== Title + Reference ===== -->
+                            <table style="margin-bottom: 6px;">
+                                <tr>
+                                    <td style="text-align: left; font-size: 11pt; font-weight: bold;">
+                                        驗貨報告 / Quality Inspection Report
+                                    </td>
+                                    <td style="text-align: right;">
+                                        <span class="ref-id"><t t-out="o.name"/></span>
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <!-- ===== Metadata table ===== -->
+                            <table class="meta-table" style="margin-bottom: 6px;">
+                                <tr>
+                                    <td class="lbl">合同號<br/><span class="label-en">Contract No.</span></td>
+                                    <td><span t-out="o.contract_number or '—'"/></td>
+                                    <td class="lbl">工廠<br/><span class="label-en">Factory</span></td>
+                                    <td><span t-out="o.factory_name or (o.supplier_id.name if o.supplier_id else '—')"/></td>
+                                    <td class="lbl">日期<br/><span class="label-en">Date</span></td>
+                                    <td><span t-out="o.inspection_date and o.inspection_date.strftime('%Y-%m-%d') or '—'"/></td>
+                                </tr>
+                                <tr>
+                                    <td class="lbl">檢驗類型<br/><span class="label-en">Inspection Type</span></td>
+                                    <td colspan="3">
+                                        <span t-out="dict(o._fields['inspection_type'].selection).get(o.inspection_type) or '—'"/>
+                                    </td>
+                                    <td class="lbl">完成比例<br/><span class="label-en">Bulk Complete</span></td>
+                                    <td><span t-out="int(o.bulk_completion_pct or 0)"/>%</td>
+                                </tr>
+                            </table>
+
+                            <!-- ===== Legend ===== -->
+                            <div class="legend">
+                                <b>驗貨項:</b> 按訂單上的要求與合同上的要求細則 &#160;|&#160;
+                                <b>P</b> = 質量通過 / Quality Pass &#160;
+                                <b>R</b> = 輕微可立即修復 / Minor, Repairable &#160;
+                                <b>X</b> = 嚴重不可修復 / Serious, Irreparable
+                            </div>
+
+                            <!-- ===== 6 Inspection Categories ===== -->
+                            <table class="checklist">
+                                <thead>
+                                    <tr>
+                                        <th class="cat-name">檢驗類別<br/><span class="label-en">Category</span></th>
+                                        <th class="cat-items">檢驗項目 / Inspection Items</th>
+                                        <th class="cat-result">判定<br/><span class="label-en">Result</span></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <!-- Carton 紙箱檢驗 -->
+                                    <tr>
+                                        <td class="cat-name">紙箱檢驗<br/><span class="label-en">Carton</span></td>
+                                        <td class="cat-items">
+                                            <span class="chk"><span class="chk-symbol" t-out="'☑' if o.carton_check_shipping_marks else '☐'"/> 嘜頭 / Marks</span>
+                                            <span class="chk"><span class="chk-symbol" t-out="'☑' if o.carton_check_paper_quality else '☐'"/> 紙質 / Paper</span>
+                                            <span class="chk"><span class="chk-symbol" t-out="'☑' if o.carton_check_size_deviation else '☐'"/> 尺寸 / Size</span>
+                                            <span class="chk"><span class="chk-symbol" t-out="'☑' if o.carton_check_barcode else '☐'"/> 條形碼 / Barcode</span>
+                                            <span class="chk"><span class="chk-symbol" t-out="'☑' if o.carton_check_sealing else '☐'"/> 封箱 / Sealing</span>
+                                            <span class="chk"><span class="chk-symbol" t-out="'☑' if o.carton_check_appearance else '☐'"/> 外觀印刷 / Print</span>
+                                        </td>
+                                        <td t-attf-class="cat-result {{ 'pass' if o.carton_result == 'pass' else 'fail' if o.carton_result == 'fail' else 'neutral' }}">
+                                            <t t-if="o.carton_result == 'pass'">☑ 通過 / Pass</t>
+                                            <t t-elif="o.carton_result == 'fail'">☒ 不通過 / Fail</t>
+                                            <t t-else="">—</t>
+                                        </td>
+                                    </tr>
+
+                                    <!-- Packaging 包裝檢驗 -->
+                                    <tr>
+                                        <td class="cat-name">包裝檢驗<br/><span class="label-en">Packaging</span></td>
+                                        <td class="cat-items">
+                                            <span class="chk"><span class="chk-symbol" t-out="'☑' if o.packaging_check_method else '☐'"/> 包裝方法 / Method</span>
+                                            <span class="chk"><span class="chk-symbol" t-out="'☑' if o.packaging_check_protection else '☐'"/> 保護良好 / Protected</span>
+                                            <span class="chk"><span class="chk-symbol" t-out="'☑' if o.packaging_check_material else '☐'"/> 材料正確 / Material</span>
+                                            <span class="chk"><span class="chk-symbol" t-out="'☑' if o.packaging_check_color_card else '☐'"/> 彩卡正確 / Color Card</span>
+                                            <span class="chk"><span class="chk-symbol" t-out="'☑' if o.packaging_check_quantity else '☐'"/> 數量正確 / Quantity</span>
+                                        </td>
+                                        <td t-attf-class="cat-result {{ 'pass' if o.packaging_result == 'pass' else 'fail' if o.packaging_result == 'fail' else 'neutral' }}">
+                                            <t t-if="o.packaging_result == 'pass'">☑ 通過 / Pass</t>
+                                            <t t-elif="o.packaging_result == 'fail'">☒ 不通過 / Fail</t>
+                                            <t t-else="">—</t>
+                                        </td>
+                                    </tr>
+
+                                    <!-- Accessories 配件檢驗 -->
+                                    <tr>
+                                        <td class="cat-name">配件檢驗<br/><span class="label-en">Accessories</span></td>
+                                        <td class="cat-items">
+                                            <span class="chk"><span class="chk-symbol" t-out="'☑' if o.accessories_check_nameplate else '☐'"/> 銘牌 / Nameplate</span>
+                                            <span class="chk"><span class="chk-symbol" t-out="'☑' if o.accessories_check_hangtag else '☐'"/> 吊牌 / Hangtag</span>
+                                            <span class="chk"><span class="chk-symbol" t-out="'☑' if o.accessories_check_origin_label else '☐'"/> 產地標 / Origin</span>
+                                            <span class="chk"><span class="chk-symbol" t-out="'☑' if o.accessories_check_position else '☐'"/> 位置正確 / Position</span>
+                                            <span class="chk"><span class="chk-symbol" t-out="'☑' if o.accessories_check_manual else '☐'"/> 說明書 / Manual</span>
+                                            <span class="chk"><span class="chk-symbol" t-out="'☑' if o.accessories_check_accessories else '☐'"/> 配件 / Accessories</span>
+                                        </td>
+                                        <td t-attf-class="cat-result {{ 'pass' if o.accessories_result == 'pass' else 'fail' if o.accessories_result == 'fail' else 'neutral' }}">
+                                            <t t-if="o.accessories_result == 'pass'">☑ 通過 / Pass</t>
+                                            <t t-elif="o.accessories_result == 'fail'">☒ 不通過 / Fail</t>
+                                            <t t-else="">—</t>
+                                        </td>
+                                    </tr>
+
+                                    <!-- Component 分件檢測 -->
+                                    <tr>
+                                        <td class="cat-name">分件檢測<br/><span class="label-en">Component</span></td>
+                                        <td class="cat-items">
+                                            <span class="chk"><span class="chk-symbol" t-out="'☑' if o.component_check_quantity else '☐'"/> 數量 / Quantity</span>
+                                            <span class="chk"><span class="chk-symbol" t-out="'☑' if o.component_check_material else '☐'"/> 材質 / Material</span>
+                                            <span class="chk"><span class="chk-symbol" t-out="'☑' if o.component_check_dimensions else '☐'"/> 尺寸 / Dimensions</span>
+                                            <span class="chk"><span class="chk-symbol" t-out="'☑' if o.component_check_color_matching else '☐'"/> 配色 / Color</span>
+                                            <span class="chk"><span class="chk-symbol" t-out="'☑' if o.component_check_other else '☐'"/> 其他 / Other</span>
+                                        </td>
+                                        <td t-attf-class="cat-result {{ 'pass' if o.component_result == 'pass' else 'fail' if o.component_result == 'fail' else 'neutral' }}">
+                                            <t t-if="o.component_result == 'pass'">☑ 通過 / Pass</t>
+                                            <t t-elif="o.component_result == 'fail'">☒ 不通過 / Fail</t>
+                                            <t t-else="">—</t>
+                                        </td>
+                                    </tr>
+
+                                    <!-- Structural 結構檢測 -->
+                                    <tr>
+                                        <td class="cat-name">結構檢測<br/><span class="label-en">Structural</span></td>
+                                        <td class="cat-items">
+                                            <span class="chk"><span class="chk-symbol" t-out="'☑' if o.structural_check_structure else '☐'"/> 結構檢測 / Structural Test</span>
+                                            <span class="chk"><span class="chk-symbol" t-out="'☑' if o.structural_check_function else '☐'"/> 功能檢測 / Functional Test</span>
+                                        </td>
+                                        <td t-attf-class="cat-result {{ 'pass' if o.structural_result == 'pass' else 'fail' if o.structural_result == 'fail' else 'neutral' }}">
+                                            <t t-if="o.structural_result == 'pass'">☑ 通過 / Pass</t>
+                                            <t t-elif="o.structural_result == 'fail'">☒ 不通過 / Fail</t>
+                                            <t t-else="">—</t>
+                                        </td>
+                                    </tr>
+
+                                    <!-- Overall 整體檢測 -->
+                                    <tr>
+                                        <td class="cat-name">整體檢測<br/><span class="label-en">Overall</span></td>
+                                        <td class="cat-items">
+                                            <span class="chk"><span class="chk-symbol" t-out="'☑' if o.overall_check_overall else '☐'"/> 整體檢測 / Overall</span>
+                                            <span class="chk"><span class="chk-symbol" t-out="'☑' if o.overall_check_appearance else '☐'"/> 外觀檢測 / Appearance</span>
+                                        </td>
+                                        <td t-attf-class="cat-result {{ 'pass' if o.overall_result == 'pass' else 'fail' if o.overall_result == 'fail' else 'neutral' }}">
+                                            <t t-if="o.overall_result == 'pass'">☑ 通過 / Pass</t>
+                                            <t t-elif="o.overall_result == 'fail'">☒ 不通過 / Fail</t>
+                                            <t t-else="">—</t>
+                                        </td>
+                                    </tr>
+
+                                    <!-- Other / catch-all 其他檢測/備註 -->
+                                    <tr t-if="o.other_notes or o.other_result">
+                                        <td class="cat-name">其他檢測<br/><span class="label-en">Other</span></td>
+                                        <td class="cat-items">
+                                            <small><span t-out="o.other_notes or '—'"/></small>
+                                        </td>
+                                        <td t-attf-class="cat-result {{ 'pass' if o.other_result == 'pass' else 'fail' if o.other_result == 'fail' else 'neutral' }}">
+                                            <t t-if="o.other_result == 'pass'">☑ 通過 / Pass</t>
+                                            <t t-elif="o.other_result == 'fail'">☒ 不通過 / Fail</t>
+                                            <t t-else="">—</t>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+
+                            <!-- ===== Per-SKU Detail Grid ===== -->
+                            <div t-if="o.sku_line_ids" style="margin-top: 10px;">
+                                <table class="sku-table">
+                                    <thead>
+                                        <tr>
+                                            <th>貨號<br/><span class="label-en">Item No.</span></th>
+                                            <th>描述<br/><span class="label-en">Description</span></th>
+                                            <th>訂單數量<br/><span class="label-en">Ordered</span></th>
+                                            <th>抽驗數量<br/><span class="label-en">Sampled</span></th>
+                                            <th>質量通過<br/><span class="label-en">Pass (P)</span></th>
+                                            <th>立即修復<br/><span class="label-en">Repair (R)</span></th>
+                                            <th>不可修復<br/><span class="label-en">Reject (X)</span></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr t-foreach="o.sku_line_ids" t-as="line">
+                                            <td><span t-out="line.item_code or '—'"/></td>
+                                            <td style="text-align: left;">
+                                                <span t-out="line.description or (line.product_id.display_name if line.product_id else '—')"/>
+                                            </td>
+                                            <td><span t-out="'%g' % (line.ordered_qty or 0)"/></td>
+                                            <td><span t-out="'%g' % (line.sampled_qty or 0)"/></td>
+                                            <td><span class="chk-symbol" t-out="'☑' if line.quality_pass else '☐'"/></td>
+                                            <td><span class="chk-symbol" t-out="'☑' if line.immediate_repair else '☐'"/></td>
+                                            <td><span class="chk-symbol" t-out="'☑' if line.not_repairable else '☐'"/></td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <!-- ===== Comments + Notes ===== -->
+                            <div style="margin-top: 10px;">
+                                <div class="label-zh">驗貨評語/問題 <span class="label-en">Inspection Comments / Issues</span></div>
+                                <div class="text-area">
+                                    <t t-out="o.inspection_comments or '—'"/>
+                                </div>
+
+                                <div class="label-zh">備註/改進 <span class="label-en">Notes / Improvements</span></div>
+                                <div class="text-area">
+                                    <t t-out="o.improvement_notes or '—'"/>
+                                </div>
+                            </div>
+
+                            <!-- ===== Reviewer Notes (if reviewed) ===== -->
+                            <div t-if="o.merchandiser_review_notes or o.merchandiser_decision">
+                                <div class="label-zh" style="margin-top: 6px;">
+                                    商品部複核意見 <span class="label-en">Merchandiser Review Notes</span>
+                                </div>
+                                <div class="text-area">
+                                    <t t-out="o.merchandiser_review_notes or '—'"/>
+                                </div>
+                            </div>
+
+                            <!-- ===== Final Outcome bar ===== -->
+                            <div class="outcome-bar">
+                                <span class="label-zh">質量確認 / Quality Confirmation:</span>
+                                <span t-attf-class="outcome-badge outcome-{{ o.final_outcome or 'pending' }}">
+                                    <t t-if="o.final_outcome == 'pass'">通過 / PASS</t>
+                                    <t t-elif="o.final_outcome == 'rework'">返工 / REWORK</t>
+                                    <t t-elif="o.final_outcome == 'fail'">不通過 / FAIL</t>
+                                    <t t-elif="o.final_outcome == 'pending'">待定 / PENDING</t>
+                                    <t t-else="">— / NOT SET</t>
+                                </span>
+                                <span t-if="o.merchandiser_decision" style="margin-left: 14px;">
+                                    <span class="label-zh">裝運決定 / Loading Decision:</span>
+                                    <span t-attf-class="outcome-badge outcome-{{
+                                        'pass' if o.merchandiser_decision == 'load_for_shipping'
+                                        else 'fail' if o.merchandiser_decision == 'reject_load'
+                                        else 'rework' }}">
+                                        <t t-if="o.merchandiser_decision == 'load_for_shipping'">允許裝運 / LOAD FOR SHIPPING</t>
+                                        <t t-elif="o.merchandiser_decision == 'hold'">擱置 / HOLD</t>
+                                        <t t-elif="o.merchandiser_decision == 'reject_load'">拒絕裝運 / REJECT LOADING</t>
+                                    </span>
+                                </span>
+                            </div>
+
+                            <!-- ===== Signature Block ===== -->
+                            <table class="sig-table" style="margin-top: 30px;">
+                                <tr>
+                                    <td>
+                                        <div class="label-zh">工廠負責人</div>
+                                        <div class="label-en">Factory Person in Charge</div>
+                                        <div style="margin-top: 4px;"><span t-out="o.factory_contact_name or ''"/></div>
+                                    </td>
+                                    <td>
+                                        <div class="label-zh">國威公司驗貨員</div>
+                                        <div class="label-en">Courtwell Inspector</div>
+                                        <div style="margin-top: 4px;"><span t-out="o.inspector_user_id.name or ''"/></div>
+                                    </td>
+                                    <td t-if="o.merchandiser_user_id">
+                                        <div class="label-zh">商品部複核</div>
+                                        <div class="label-en">Reviewer (Merchandiser)</div>
+                                        <div style="margin-top: 4px;">
+                                            <span t-out="o.merchandiser_user_id.name or ''"/>
+                                            <t t-if="o.merchandiser_review_date">
+                                                <br/><small><span t-out="o.merchandiser_review_date.strftime('%Y-%m-%d')"/></small>
+                                            </t>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div class="label-zh">驗貨日期</div>
+                                        <div class="label-en">Inspection Date</div>
+                                        <div style="margin-top: 4px;">
+                                            <span t-out="o.inspection_date and o.inspection_date.strftime('%Y-%m-%d') or ''"/>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </table>
+
+                        </div>
+                    </div>
+                </t>
+            </t>
+        </t>
+    </template>
+
+</odoo>

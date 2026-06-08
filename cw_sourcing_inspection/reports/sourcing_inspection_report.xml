@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!--
+        Paper format: A4 portrait, tight margins so the 6 checklist
+        rows + per-SKU grid + comments + signature block all fit on a
+        single page for typical inspections.
+    -->
+    <record id="report_paperformat_qc_inspection" model="report.paperformat">
+        <field name="name">QC Inspection A4</field>
+        <field name="default" eval="False"/>
+        <field name="format">A4</field>
+        <field name="orientation">Portrait</field>
+        <field name="margin_top">10</field>
+        <field name="margin_bottom">10</field>
+        <field name="margin_left">10</field>
+        <field name="margin_right">10</field>
+        <field name="header_line" eval="False"/>
+        <field name="header_spacing">5</field>
+        <field name="dpi">90</field>
+    </record>
+
+    <!--
+        Report action — bilingual (Chinese + English on the same page).
+        Bound to sourcing.inspection so it appears in the Print dropdown
+        on the inspection form automatically. A dedicated Print button is
+        added separately in the form view for visibility.
+    -->
+    <record id="action_report_sourcing_inspection" model="ir.actions.report">
+        <field name="name">QC Inspection Report (中英文)</field>
+        <field name="model">sourcing.inspection</field>
+        <field name="report_type">qweb-pdf</field>
+        <field name="report_name">cw_sourcing_inspection.report_sourcing_inspection_document</field>
+        <field name="report_file">cw_sourcing_inspection.report_sourcing_inspection_document</field>
+        <field name="print_report_name">'QC Inspection - %s' % (object.name or '').replace('/','-')</field>
+        <field name="binding_model_id" ref="model_sourcing_inspection"/>
+        <field name="binding_type">report</field>
+        <field name="paperformat_id" ref="report_paperformat_qc_inspection"/>
+    </record>
+
+</odoo>

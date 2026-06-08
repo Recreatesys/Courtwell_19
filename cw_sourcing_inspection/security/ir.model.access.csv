@@ -1,0 +1,7 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_inspection_qc,sourcing.inspection QC inspector,model_sourcing_inspection,cw_sourcing_inspection.group_qc_inspector,1,1,1,0
+access_inspection_reviewer,sourcing.inspection reviewer,model_sourcing_inspection,cw_sourcing_inspection.group_qc_reviewer,1,1,1,0
+access_inspection_admin,sourcing.inspection admin,model_sourcing_inspection,base.group_system,1,1,1,1
+access_inspection_sku_qc,sourcing.inspection.sku.line QC,model_sourcing_inspection_sku_line,cw_sourcing_inspection.group_qc_inspector,1,1,1,1
+access_inspection_sku_reviewer,sourcing.inspection.sku.line reviewer,model_sourcing_inspection_sku_line,cw_sourcing_inspection.group_qc_reviewer,1,1,1,1
+access_inspection_sku_admin,sourcing.inspection.sku.line admin,model_sourcing_inspection_sku_line,base.group_system,1,1,1,1
