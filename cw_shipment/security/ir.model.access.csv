@@ -1,0 +1,7 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_cw_port_user,cw.port user,model_cw_port,base.group_user,1,0,0,0
+access_cw_port_manager,cw.port manager,model_cw_port,base.group_system,1,1,1,1
+access_cw_shipment_user,cw.shipment user,model_cw_shipment,base.group_user,1,1,1,0
+access_cw_shipment_manager,cw.shipment manager,model_cw_shipment,base.group_system,1,1,1,1
+access_cw_shipment_container_user,cw.shipment.container user,model_cw_shipment_container,base.group_user,1,1,1,1
+access_cw_shipment_container_manager,cw.shipment.container manager,model_cw_shipment_container,base.group_system,1,1,1,1

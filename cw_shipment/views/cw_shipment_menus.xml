@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <menuitem id="menu_cw_shipment_root"
+              name="Shipments"
+              sequence="55"
+              web_icon="cw_shipment,static/description/icon.png"/>
+
+    <menuitem id="menu_cw_shipment_operations"
+              name="Operations"
+              parent="menu_cw_shipment_root"
+              sequence="10"/>
+
+    <menuitem id="menu_cw_shipment_list"
+              name="Shipments"
+              parent="menu_cw_shipment_operations"
+              action="action_cw_shipment"
+              sequence="10"/>
+
+    <menuitem id="menu_cw_shipment_config"
+              name="Configuration"
+              parent="menu_cw_shipment_root"
+              sequence="90"/>
+
+    <menuitem id="menu_cw_port"
+              name="Ports"
+              parent="menu_cw_shipment_config"
+              action="action_cw_port"
+              sequence="10"/>
+
+</odoo>

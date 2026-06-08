@@ -1,0 +1,186 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ===== Shipment list ===== -->
+    <record id="view_cw_shipment_list" model="ir.ui.view">
+        <field name="name">cw.shipment.list</field>
+        <field name="model">cw.shipment</field>
+        <field name="arch" type="xml">
+            <list string="Shipments" multi_edit="1"
+                  decoration-success="status == 'delivered'"
+                  decoration-info="status == 'shipped'"
+                  decoration-warning="status == 'cargo_ready'"
+                  decoration-muted="status == 'cancelled'">
+                <field name="pi_no"/>
+                <field name="customer_id"/>
+                <field name="supplier_id"/>
+                <field name="forwarder_id" optional="show"/>
+                <field name="port_of_loading_id" optional="show"/>
+                <field name="destination_port_id" optional="show"/>
+                <field name="earliest_etd" optional="show"/>
+                <field name="latest_eta" optional="show"/>
+                <field name="container_count" optional="show"/>
+                <field name="total_cbm" sum="Total CBM" optional="hide"/>
+                <field name="gross_weight" sum="Total GW" optional="hide"/>
+                <field name="invoice_amount" sum="Total Invoice" optional="show"/>
+                <field name="currency_id" optional="hide"/>
+                <field name="status" widget="badge"
+                       decoration-success="status == 'delivered'"
+                       decoration-info="status == 'shipped'"
+                       decoration-warning="status == 'cargo_ready'"
+                       decoration-muted="status == 'cancelled'"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- ===== Shipment form ===== -->
+    <record id="view_cw_shipment_form" model="ir.ui.view">
+        <field name="name">cw.shipment.form</field>
+        <field name="model">cw.shipment</field>
+        <field name="arch" type="xml">
+            <form string="Shipment">
+                <header>
+                    <field name="status" widget="statusbar"
+                           statusbar_visible="draft,cargo_ready,booked,shipped,arrived,delivered"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <label for="pi_no" string="PI No."/>
+                        <h1><field name="pi_no" placeholder="e.g. CW-128 RI"/></h1>
+                    </div>
+                    <group>
+                        <group string="Parties">
+                            <field name="customer_id"/>
+                            <field name="supplier_id"/>
+                            <field name="forwarder_id"/>
+                            <field name="term"/>
+                        </group>
+                        <group string="Cargo">
+                            <field name="description"/>
+                            <field name="ctn_pkg"/>
+                            <field name="gross_weight"/>
+                            <field name="total_cbm"/>
+                        </group>
+                    </group>
+                    <group>
+                        <group string="Ports">
+                            <field name="port_of_loading_id"/>
+                            <field name="destination_port_id"/>
+                        </group>
+                        <group string="Invoice">
+                            <field name="invoice_no"/>
+                            <field name="fty_pi"/>
+                            <label for="invoice_amount"/>
+                            <div class="o_row">
+                                <field name="invoice_amount"/>
+                                <field name="currency_id" options="{'no_create': True, 'no_open': True}"/>
+                            </div>
+                            <field name="freight_cost"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Containers" name="containers">
+                            <field name="container_ids">
+                                <list editable="bottom">
+                                    <field name="sequence" widget="handle"/>
+                                    <field name="container_size"/>
+                                    <field name="cntr_number"/>
+                                    <field name="bl_number"/>
+                                    <field name="carrier_id"/>
+                                    <field name="vessel_name"/>
+                                    <field name="etd"/>
+                                    <field name="eta"/>
+                                </list>
+                                <form string="Container">
+                                    <sheet>
+                                        <group>
+                                            <group>
+                                                <field name="container_size"/>
+                                                <field name="cntr_number"/>
+                                                <field name="bl_number"/>
+                                                <field name="carrier_id"/>
+                                                <field name="vessel_name"/>
+                                            </group>
+                                            <group>
+                                                <field name="open_date"/>
+                                                <field name="closing_date"/>
+                                                <field name="si_cutoff"/>
+                                                <field name="vgm_cutoff"/>
+                                                <field name="etd"/>
+                                                <field name="eta_original"/>
+                                                <field name="eta"/>
+                                            </group>
+                                        </group>
+                                    </sheet>
+                                </form>
+                            </field>
+                        </page>
+                        <page string="Dates &amp; Docs" name="dates">
+                            <group>
+                                <group string="Production">
+                                    <field name="cargo_ready_date"/>
+                                    <field name="inspection_date"/>
+                                </group>
+                                <group string="Document flow">
+                                    <field name="doc_to_customer_date"/>
+                                    <field name="telex_released_date"/>
+                                    <field name="sent_doc_date"/>
+                                    <field name="courier"/>
+                                </group>
+                            </group>
+                        </page>
+                        <page string="Remarks" name="remarks">
+                            <field name="remarks" placeholder="Free-form notes about this shipment..."/>
+                        </page>
+                        <page string="Import Data" name="import_data" groups="base.group_no_one">
+                            <field name="import_raw" readonly="1"/>
+                        </page>
+                    </notebook>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <!-- ===== Shipment search ===== -->
+    <record id="view_cw_shipment_search" model="ir.ui.view">
+        <field name="name">cw.shipment.search</field>
+        <field name="model">cw.shipment</field>
+        <field name="arch" type="xml">
+            <search string="Shipments">
+                <field name="pi_no"/>
+                <field name="customer_id"/>
+                <field name="supplier_id"/>
+                <field name="forwarder_id"/>
+                <field name="cntr_numbers" string="CNTR No."/>
+                <field name="bl_numbers" string="BL No."/>
+                <field name="port_of_loading_id"/>
+                <field name="destination_port_id"/>
+                <separator/>
+                <filter string="Draft" name="draft" domain="[('status','=','draft')]"/>
+                <filter string="Cargo Ready" name="cargo_ready" domain="[('status','=','cargo_ready')]"/>
+                <filter string="Shipped" name="shipped" domain="[('status','=','shipped')]"/>
+                <filter string="Arrived" name="arrived" domain="[('status','=','arrived')]"/>
+                <filter string="Delivered" name="delivered" domain="[('status','=','delivered')]"/>
+                <separator/>
+                <filter string="ETD this month" name="etd_this_month"
+                        domain="[('earliest_etd','&gt;=', context_today().replace(day=1).strftime('%Y-%m-%d'))]"/>
+                <separator/>
+                <filter string="Customer" name="group_customer" context="{'group_by':'customer_id'}"/>
+                <filter string="Supplier" name="group_supplier" context="{'group_by':'supplier_id'}"/>
+                <filter string="Forwarder" name="group_forwarder" context="{'group_by':'forwarder_id'}"/>
+                <filter string="Status" name="group_status" context="{'group_by':'status'}"/>
+                <filter string="Destination" name="group_destination" context="{'group_by':'destination_port_id'}"/>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_cw_shipment" model="ir.actions.act_window">
+        <field name="name">Shipments</field>
+        <field name="res_model">cw.shipment</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="view_cw_shipment_search"/>
+        <field name="context">{'search_default_shipped': 1}</field>
+    </record>
+
+</odoo>

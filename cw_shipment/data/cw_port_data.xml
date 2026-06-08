@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo noupdate="1">
+
+    <!-- Ports of loading: China -->
+    <record id="port_qingdao" model="cw.port">
+        <field name="name">Qingdao</field>
+        <field name="unlocode">CNTAO</field>
+        <field name="country_id" ref="base.cn"/>
+    </record>
+    <record id="port_ningbo" model="cw.port">
+        <field name="name">Ningbo</field>
+        <field name="unlocode">CNNGB</field>
+        <field name="country_id" ref="base.cn"/>
+    </record>
+    <record id="port_shanghai" model="cw.port">
+        <field name="name">Shanghai</field>
+        <field name="unlocode">CNSHA</field>
+        <field name="country_id" ref="base.cn"/>
+    </record>
+    <record id="port_shenzhen" model="cw.port">
+        <field name="name">Shenzhen</field>
+        <field name="unlocode">CNSZX</field>
+        <field name="country_id" ref="base.cn"/>
+    </record>
+    <record id="port_yantian" model="cw.port">
+        <field name="name">Yantian</field>
+        <field name="unlocode">CNYTN</field>
+        <field name="country_id" ref="base.cn"/>
+    </record>
+    <record id="port_shekou" model="cw.port">
+        <field name="name">Shekou</field>
+        <field name="unlocode">CNSHK</field>
+        <field name="country_id" ref="base.cn"/>
+    </record>
+    <record id="port_nansha" model="cw.port">
+        <field name="name">Nansha</field>
+        <field name="unlocode">CNNSA</field>
+        <field name="country_id" ref="base.cn"/>
+    </record>
+    <record id="port_guangzhou" model="cw.port">
+        <field name="name">Guangzhou</field>
+        <field name="unlocode">CNGZG</field>
+        <field name="country_id" ref="base.cn"/>
+    </record>
+    <record id="port_xingang" model="cw.port">
+        <field name="name">Xingang, Tianjin</field>
+        <field name="unlocode">CNTXG</field>
+        <field name="country_id" ref="base.cn"/>
+    </record>
+    <record id="port_nanjing" model="cw.port">
+        <field name="name">Nanjing</field>
+        <field name="unlocode">CNNJG</field>
+        <field name="country_id" ref="base.cn"/>
+    </record>
+    <record id="port_xiamen" model="cw.port">
+        <field name="name">Xiamen</field>
+        <field name="unlocode">CNXMN</field>
+        <field name="country_id" ref="base.cn"/>
+    </record>
+    <record id="port_hongkong" model="cw.port">
+        <field name="name">Hong Kong</field>
+        <field name="unlocode">HKHKG</field>
+        <field name="country_id" ref="base.hk"/>
+    </record>
+    <record id="port_yiwu" model="cw.port">
+        <field name="name">Ningbo Yiwu</field>
+        <field name="unlocode">CNYWU</field>
+        <field name="country_id" ref="base.cn"/>
+    </record>
+
+    <!-- Destination ports -->
+    <record id="port_kingston_jm" model="cw.port">
+        <field name="name">Kingston, Jamaica</field>
+        <field name="unlocode">JMKIN</field>
+        <field name="country_id" ref="base.jm"/>
+    </record>
+    <record id="port_bridgetown_bb" model="cw.port">
+        <field name="name">Bridgetown, Barbados</field>
+        <field name="unlocode">BBBGI</field>
+        <field name="country_id" ref="base.bb"/>
+    </record>
+    <record id="port_rijeka_hr" model="cw.port">
+        <field name="name">Rijeka, Croatia</field>
+        <field name="unlocode">HRRJK</field>
+        <field name="country_id" ref="base.hr"/>
+    </record>
+    <record id="port_jebel_ali" model="cw.port">
+        <field name="name">Jebel Ali, UAE</field>
+        <field name="unlocode">AEJEA</field>
+        <field name="country_id" ref="base.ae"/>
+    </record>
+    <record id="port_miami_us" model="cw.port">
+        <field name="name">Miami, USA</field>
+        <field name="unlocode">USMIA</field>
+        <field name="country_id" ref="base.us"/>
+    </record>
+    <record id="port_paramaribo_sr" model="cw.port">
+        <field name="name">Paramaribo, Suriname</field>
+        <field name="unlocode">SRPBM</field>
+        <field name="country_id" ref="base.sr"/>
+    </record>
+    <record id="port_abidjan_ci" model="cw.port">
+        <field name="name">Abidjan, Cote d'Ivoire</field>
+        <field name="unlocode">CIABJ</field>
+        <field name="country_id" ref="base.ci"/>
+    </record>
+
+</odoo>
