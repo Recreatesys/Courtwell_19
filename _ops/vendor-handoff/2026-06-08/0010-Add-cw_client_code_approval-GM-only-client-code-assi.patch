@@ -1,0 +1,612 @@
+From 6e3d2a7009ab8d9f623525c7b4d903702704510c Mon Sep 17 00:00:00 2001
+From: cwintlhk <howardcheng@courtwell.com.hk>
+Date: Mon, 8 Jun 2026 11:45:48 +0200
+Subject: [PATCH 10/14] Add cw_client_code_approval: GM-only client code
+ assignment workflow
+
+---
+ cw_client_code_approval/__init__.py           |   1 +
+ cw_client_code_approval/__manifest__.py       |  69 ++++++++
+ .../data/mail_activity_type_data.xml          |  28 ++++
+ cw_client_code_approval/models/__init__.py    |   2 +
+ cw_client_code_approval/models/crm_lead.py    | 142 ++++++++++++++++
+ cw_client_code_approval/models/res_partner.py | 153 ++++++++++++++++++
+ .../cw_client_code_approval_groups.xml        |  47 ++++++
+ cw_client_code_approval/views/menu_action.xml |  51 ++++++
+ .../views/res_partner_views.xml               |  35 ++++
+ 9 files changed, 528 insertions(+)
+ create mode 100644 cw_client_code_approval/__init__.py
+ create mode 100644 cw_client_code_approval/__manifest__.py
+ create mode 100644 cw_client_code_approval/data/mail_activity_type_data.xml
+ create mode 100644 cw_client_code_approval/models/__init__.py
+ create mode 100644 cw_client_code_approval/models/crm_lead.py
+ create mode 100644 cw_client_code_approval/models/res_partner.py
+ create mode 100644 cw_client_code_approval/security/cw_client_code_approval_groups.xml
+ create mode 100644 cw_client_code_approval/views/menu_action.xml
+ create mode 100644 cw_client_code_approval/views/res_partner_views.xml
+
+diff --git a/cw_client_code_approval/__init__.py b/cw_client_code_approval/__init__.py
+new file mode 100644
+index 0000000..0650744
+--- /dev/null
++++ b/cw_client_code_approval/__init__.py
+@@ -0,0 +1 @@
++from . import models
+diff --git a/cw_client_code_approval/__manifest__.py b/cw_client_code_approval/__manifest__.py
+new file mode 100644
+index 0000000..c1ee8a3
+--- /dev/null
++++ b/cw_client_code_approval/__manifest__.py
+@@ -0,0 +1,69 @@
++{
++    'name': "CW Client Code: Manager Approval Workflow",
++    'version': '19.0.1.0.0',
++    'category': 'Contacts',
++    'summary': "Manager-only assignment of 2-letter client codes, with auto-request "
++               "activities, chatter @mentions, and a pending-codes worklist.",
++    'description': """
++Courtwell — Client Code Approval Workflow
++=========================================
++
++Closes the loop left open by cw_contacts_phase1 + sourcing_reference:
++the 2-letter ``client_code`` on a Client partner is required to generate
++the sourcing Reference ID, but until now there was no in-system way for
++a Merchandiser to request a code or for the General Manager to assign
++one in a tracked way. Merchandisers hit the stage-exit block and had to
++chase the GM out-of-band.
++
++This module adds:
++
++1. A ``Client Code Approver`` group. Members (Howard, Eva) are the only
++   users who can write ``res.partner.client_code``. Everyone else sees
++   the field as read-only and the server rejects writes from non-members.
++   Assignment is manual via Settings -> Users.
++
++2. A ``mail.activity.type`` "Assign Client Code". When a non-approver
++   creates a Client partner with no code, the module:
++     * schedules this activity on the partner for every approver, AND
++     * posts a chatter message @mentioning every approver, AND
++     * surfaces the partner in a dedicated "Clients Pending Codes"
++       worklist menu visible only to approvers.
++
++3. The same request fires again (idempotently — never duplicates an
++   open activity) if a Merchandiser later tries to move the opportunity
++   past Incoming Inquiry while the client_code is still missing.
++
++4. The hard stage-exit block for ``client_code`` moves from "exit
++   Incoming Inquiry" to "exit Proforma Invoice". Merchandisers can
++   advance leads through Inquiry / Quotation / Proforma Invoice without
++   the code in hand; only the QC step requires it. The GS1-segment
++   requirement still triggers at Inquiry exit (unchanged — needed to
++   pick a segment before quoting).
++
++5. The sourcing Reference ID generator retries on every post-Inquiry
++   stage entry instead of only at Quotation. If the code is missing at
++   Quotation, the reference is generated the moment the GM assigns the
++   code and the lead next moves stage (or via a manual button — future
++   enhancement).
++""",
++    'author': 'Courtwell Internal',
++    'website': 'https://courtwell.com.hk',
++    'depends': [
++        'base',
++        'mail',
++        'contacts',
++        'crm',
++        'cw_contacts_phase1',
++        'sourcing_reference',
++    ],
++    'data': [
++        'security/cw_client_code_approval_groups.xml',
++        'data/mail_activity_type_data.xml',
++        'views/res_partner_views.xml',
++        'views/menu_action.xml',
++    ],
++    'license': 'LGPL-3',
++    'installable': True,
++    'application': False,
++    'auto_install': False,
++}
+diff --git a/cw_client_code_approval/data/mail_activity_type_data.xml b/cw_client_code_approval/data/mail_activity_type_data.xml
+new file mode 100644
+index 0000000..bcca833
+--- /dev/null
++++ b/cw_client_code_approval/data/mail_activity_type_data.xml
+@@ -0,0 +1,28 @@
++<?xml version="1.0" encoding="utf-8"?>
++<odoo noupdate="1">
++
++    <!--
++        Activity type: Assign Client Code
++
++        Auto-scheduled on a res.partner whenever a non-approver creates a
++        Client without a client_code, or when a CRM lead transition is
++        blocked because the partner still has no code. Approvers complete
++        the activity by typing the 2 letters into the partner form and
++        marking the activity Done.
++
++        delay_count = 1 day, summary = brief, no chained activity. The
++        activity icon is the standard "user-plus" — chosen because the
++        feel matches "new contact needs follow-up" more than a clipboard.
++    -->
++    <record id="mail_activity_type_assign_client_code" model="mail.activity.type">
++        <field name="name">Assign Client Code</field>
++        <field name="summary">Assign 2-letter Client Code</field>
++        <field name="icon">fa-id-card-o</field>
++        <field name="delay_count">1</field>
++        <field name="delay_unit">days</field>
++        <field name="res_model">res.partner</field>
++        <field name="category">default</field>
++        <field name="sequence">15</field>
++    </record>
++
++</odoo>
+diff --git a/cw_client_code_approval/models/__init__.py b/cw_client_code_approval/models/__init__.py
+new file mode 100644
+index 0000000..971fe2f
+--- /dev/null
++++ b/cw_client_code_approval/models/__init__.py
+@@ -0,0 +1,2 @@
++from . import res_partner
++from . import crm_lead
+diff --git a/cw_client_code_approval/models/crm_lead.py b/cw_client_code_approval/models/crm_lead.py
+new file mode 100644
+index 0000000..c655f57
+--- /dev/null
++++ b/cw_client_code_approval/models/crm_lead.py
+@@ -0,0 +1,142 @@
++import re
++
++from odoo import _, api, models
++from odoo.exceptions import UserError
++
++
++# Stages where client_code becomes mandatory. Entering any of these
++# stages without a code is blocked. Matches the sourcing_reference
++# pipeline definition (data/crm_stage_data.xml).
++POST_PI_STAGE_REFS = (
++    'sourcing_reference.crm_stage_qc',
++    'sourcing_reference.crm_stage_enroute',
++    'sourcing_reference.crm_stage_upsell_reorder',
++)
++
++# Stages where the sourcing reference should be auto-generated if the
++# client_code is now available. Excludes Incoming Inquiry, Lost, and
++# On Hold. Retries every stage transition until the ref is created.
++POST_INQUIRY_STAGE_REFS = (
++    'sourcing_reference.crm_stage_quotation',
++    'sourcing_reference.crm_stage_proforma_invoice',
++    'sourcing_reference.crm_stage_qc',
++    'sourcing_reference.crm_stage_enroute',
++    'sourcing_reference.crm_stage_upsell_reorder',
++)
++
++
++class CrmLead(models.Model):
++    _inherit = 'crm.lead'
++
++    # ------------------------------------------------------------------
++    # Relax the Incoming Inquiry exit gate: client_code is no longer
++    # required there. GS1 Segment requirement is preserved.
++    # ------------------------------------------------------------------
++    def _validate_inquiry_exit(self):
++        self.ensure_one()
++        if not self.gpc_segment_id or not self.gpc_segment_id.code:
++            raise UserError(_(
++                "GS1 Segment must be selected before this Opportunity "
++                "can progress past Incoming Inquiry."
++            ))
++
++    # ------------------------------------------------------------------
++    # New gate: block entry to QC / Enroute / Upsell when client_code
++    # is still missing. Also re-fires the assignment request on the
++    # partner so approvers get a fresh notification.
++    # ------------------------------------------------------------------
++    def _validate_proforma_exit(self):
++        self.ensure_one()
++        partner = self.partner_id
++        cc = (partner.client_code or '').strip() if partner else ''
++        if not cc or not re.fullmatch(r'[A-Z]{2}', cc):
++            if partner:
++                partner._request_client_code_assignment()
++            raise UserError(_(
++                "Client Code is missing on '%(client)s'. The 2-letter "
++                "code must be assigned by Howard or Eva before this "
++                "Opportunity can move past Proforma Invoice. An "
++                "assignment request has been (re-)sent to the approvers "
++                "— they will see it in their activity inbox.",
++                client=partner.display_name if partner else _('this client'),
++            ))
++
++    def _is_post_pi_stage(self, stage):
++        if not stage:
++            return False
++        for ref in POST_PI_STAGE_REFS:
++            target = self.env.ref(ref, raise_if_not_found=False)
++            if target and stage.id == target.id:
++                return True
++        return (stage.name or '').strip().lower() in (
++            'qc', 'enroute', 'upsell/reorder',
++        )
++
++    def _is_post_inquiry_stage(self, stage):
++        if not stage:
++            return False
++        for ref in POST_INQUIRY_STAGE_REFS:
++            target = self.env.ref(ref, raise_if_not_found=False)
++            if target and stage.id == target.id:
++                return True
++        return (stage.name or '').strip().lower() in (
++            'quotation', 'proforma invoice', 'qc', 'enroute', 'upsell/reorder',
++        )
++
++    # ------------------------------------------------------------------
++    # write() hooks:
++    #   1. Pre-write: block entry to a post-PI stage when client_code
++    #      is missing (calls _validate_proforma_exit which also triggers
++    #      a fresh activity request to the approvers).
++    #   2. Post-write: try to generate sourcing_reference on entry to
++    #      any post-Inquiry stage — retries each time the lead moves,
++    #      so a lead stuck in Quotation without a code will auto-get
++    #      its ref the moment the GM assigns the code and the
++    #      merchandiser moves the lead again.
++    # ------------------------------------------------------------------
++    def write(self, vals):
++        if 'stage_id' in vals and not self.env.context.get('skip_sourcing_validation'):
++            new_stage = (
++                self.env['crm.stage'].browse(vals['stage_id'])
++                if vals['stage_id'] else False
++            )
++            if new_stage and self._is_post_pi_stage(new_stage):
++                for lead in self:
++                    if lead.stage_id.id == new_stage.id:
++                        continue
++                    lead._validate_proforma_exit()
++
++        result = super().write(vals)
++
++        if 'stage_id' in vals and not self.env.context.get('skip_sourcing_validation'):
++            for lead in self:
++                if lead.sourcing_reference:
++                    continue
++                if not lead.partner_id or not lead.gpc_segment_id:
++                    continue
++                if not (lead.partner_id.client_code or '').strip():
++                    continue
++                if lead._is_post_inquiry_stage(lead.stage_id):
++                    lead._generate_sourcing_reference()
++
++        return result
++
++    # ------------------------------------------------------------------
++    # Silent-skip when client_code missing instead of raising. This
++    # lets the lead sit in Quotation / Proforma Invoice without a ref
++    # until the code is assigned; the post-write hook above retries
++    # generation on every later stage move.
++    # ------------------------------------------------------------------
++    def _generate_sourcing_reference(self):
++        self.ensure_one()
++        if self.sourcing_reference:
++            return
++        partner = self.partner_id
++        cc = (partner.client_code or '').strip() if partner else ''
++        if not cc or not re.fullmatch(r'[A-Z]{2}', cc):
++            if partner:
++                partner._request_client_code_assignment()
++            return
++        if not self.gpc_segment_id or not self.gpc_segment_id.code:
++            return
++        return super()._generate_sourcing_reference()
+diff --git a/cw_client_code_approval/models/res_partner.py b/cw_client_code_approval/models/res_partner.py
+new file mode 100644
+index 0000000..5f5f249
+--- /dev/null
++++ b/cw_client_code_approval/models/res_partner.py
+@@ -0,0 +1,153 @@
++from odoo import _, api, fields, models
++from odoo.exceptions import UserError
++
++
++CLIENT_CODE_APPROVER_GROUP = 'cw_client_code_approval.group_client_code_approver'
++ASSIGN_CLIENT_CODE_ACTIVITY = 'cw_client_code_approval.mail_activity_type_assign_client_code'
++
++
++class ResPartner(models.Model):
++    _inherit = 'res.partner'
++
++    can_assign_client_code = fields.Boolean(
++        compute='_compute_can_assign_client_code',
++        help='True if the current user is in the Client Code Approver group. '
++             'Used by the form view to toggle the client_code field between '
++             'read-only (everyone) and editable (Howard, Eva).',
++    )
++
++    @api.depends_context('uid')
++    def _compute_can_assign_client_code(self):
++        approver = self.env.user.has_group(CLIENT_CODE_APPROVER_GROUP)
++        for rec in self:
++            rec.can_assign_client_code = approver
++
++    # ------------------------------------------------------------------
++    # Field-level write restriction + auto-request on create/save
++    # ------------------------------------------------------------------
++    @api.model_create_multi
++    def create(self, vals_list):
++        approver = self.env.user.has_group(CLIENT_CODE_APPROVER_GROUP)
++        if not approver and not self.env.su:
++            for vals in vals_list:
++                if vals.get('client_code') and vals.get('contact_type') == 'client':
++                    raise UserError(_(
++                        "Only members of the 'Client Code Approver' group "
++                        "(Howard, Eva) may assign the Client Code. Save the "
++                        "client without a code — an approval request will be "
++                        "sent to the approvers automatically."
++                    ))
++        partners = super().create(vals_list)
++        for partner in partners:
++            if partner.contact_type == 'client' and not partner.client_code:
++                partner._request_client_code_assignment()
++        return partners
++
++    def write(self, vals):
++        if 'client_code' in vals:
++            approver = self.env.user.has_group(CLIENT_CODE_APPROVER_GROUP)
++            if not approver and not self.env.su:
++                new_code = (vals.get('client_code') or '').strip().upper() or False
++                changing = self.filtered(
++                    lambda p: (p.client_code or False) != new_code
++                )
++                if changing:
++                    raise UserError(_(
++                        "Only members of the 'Client Code Approver' group "
++                        "(Howard, Eva) may write the Client Code. Howard "
++                        "and Eva have an open activity on this contact — "
++                        "ask one of them to assign the code."
++                    ))
++        res = super().write(vals)
++        if vals.get('client_code'):
++            for partner in self:
++                if partner.client_code:
++                    partner._clear_client_code_activities()
++        elif 'contact_type' in vals:
++            for partner in self:
++                if partner.contact_type == 'client' and not partner.client_code:
++                    partner._request_client_code_assignment()
++        return res
++
++    # ------------------------------------------------------------------
++    # Helpers
++    # ------------------------------------------------------------------
++    def _get_client_code_approvers(self):
++        group = self.env.ref(CLIENT_CODE_APPROVER_GROUP, raise_if_not_found=False)
++        if not group:
++            return self.env['res.users']
++        return group.sudo().users.filtered(lambda u: u.active and not u.share)
++
++    def _request_client_code_assignment(self):
++        """Idempotently raise a request for the GM to assign a 2-letter
++        Client Code on this partner. Schedules a mail.activity assigned
++        to the lowest-id approver (deterministic) and posts an @mention
++        message tagging every approver so all of them are notified.
++
++        Idempotent on activities: if an open Assign Client Code activity
++        already exists on this partner, no new activity is scheduled, but
++        a chatter message is still posted (so re-triggers from CRM stage
++        transitions surface fresh notifications)."""
++        for partner in self:
++            if partner.contact_type != 'client' or partner.client_code:
++                continue
++            activity_type = self.env.ref(
++                ASSIGN_CLIENT_CODE_ACTIVITY, raise_if_not_found=False,
++            )
++            approvers = partner._get_client_code_approvers()
++            if not activity_type or not approvers:
++                continue
++
++            existing = self.env['mail.activity'].sudo().search([
++                ('res_model', '=', 'res.partner'),
++                ('res_id', '=', partner.id),
++                ('activity_type_id', '=', activity_type.id),
++            ], limit=1)
++
++            if not existing:
++                assignee = approvers.sorted('id')[:1]
++                model_id = self.env['ir.model']._get('res.partner').id
++                self.env['mail.activity'].sudo().create({
++                    'res_model_id': model_id,
++                    'res_id': partner.id,
++                    'activity_type_id': activity_type.id,
++                    'summary': _(
++                        'Assign 2-letter Client Code for %s',
++                        partner.display_name,
++                    ),
++                    'user_id': assignee.id,
++                })
++
++            approver_partner_ids = approvers.partner_id.ids
++            if approver_partner_ids:
++                partner.sudo().message_post(
++                    body=_(
++                        "Client created without a 2-letter Client Code. "
++                        "Please assign one — the code is required to "
++                        "generate the sourcing Reference ID and to advance "
++                        "this client's opportunities past Proforma Invoice."
++                    ),
++                    partner_ids=approver_partner_ids,
++                    message_type='comment',
++                    subtype_xmlid='mail.mt_comment',
++                )
++
++    def _clear_client_code_activities(self):
++        """When a code is assigned, mark all open Assign Client Code
++        activities on this partner as Done. Uses action_feedback so the
++        completion is recorded in chatter as audit trail."""
++        for partner in self:
++            activity_type = self.env.ref(
++                ASSIGN_CLIENT_CODE_ACTIVITY, raise_if_not_found=False,
++            )
++            if not activity_type:
++                continue
++            activities = self.env['mail.activity'].sudo().search([
++                ('res_model', '=', 'res.partner'),
++                ('res_id', '=', partner.id),
++                ('activity_type_id', '=', activity_type.id),
++            ])
++            if activities:
++                activities.action_feedback(
++                    feedback=_('Code assigned: %s', partner.client_code),
++                )
+diff --git a/cw_client_code_approval/security/cw_client_code_approval_groups.xml b/cw_client_code_approval/security/cw_client_code_approval_groups.xml
+new file mode 100644
+index 0000000..fc50285
+--- /dev/null
++++ b/cw_client_code_approval/security/cw_client_code_approval_groups.xml
+@@ -0,0 +1,47 @@
++<?xml version="1.0" encoding="utf-8"?>
++<odoo>
++    <data noupdate="0">
++
++        <!--
++            Group: Client Code Approver
++
++            Members are the only users allowed to write res.partner.client_code.
++            Assigned to Howard and Eva via Settings -> Users -> Other -> Contacts.
++
++            Reuses the "Contacts" privilege category created by cw_contacts_restrict
++            so the checkbox lands next to "Contacts / Full Directory Access" on the
++            user form, rather than buried in its own category. Defensive fallback
++            below creates the category/privilege if cw_contacts_restrict is not
++            installed at the same time.
++        -->
++        <record id="module_category_cw_contacts" model="ir.module.category">
++            <field name="name">Contacts</field>
++            <field name="description">Courtwell Contacts directory access</field>
++            <field name="sequence">25</field>
++        </record>
++
++        <!--
++            Separate privilege from cw_contacts_restrict's "Contacts" privilege.
++
++            In Odoo 19, groups that share a privilege render as a single
++            radio-style selector on the user form (one-of-N). Reusing the
++            same "Contacts" privilege as Full Directory Access would force
++            users into picking ONE of the two — Howard couldn't hold both.
++            This privilege is dedicated to client-code approval so the
++            checkbox is independent of Full Directory Access.
++        -->
++        <record id="privilege_cw_client_code_approval" model="res.groups.privilege">
++            <field name="name">Client Code Approval</field>
++            <field name="category_id" ref="module_category_cw_contacts"/>
++            <field name="sequence">20</field>
++        </record>
++
++        <record id="group_client_code_approver" model="res.groups">
++            <field name="name">Client Code Approver</field>
++            <field name="privilege_id" ref="privilege_cw_client_code_approval"/>
++            <field name="implied_ids" eval="[(4, ref('base.group_user'))]"/>
++            <field name="comment">Members can write the 2-letter Client Code on Client partners and clear "Assign Client Code" activities. Everyone else sees client_code as read-only. Intended members: Howard and Eva. Independent of "Full Directory Access" — a user can hold both.</field>
++        </record>
++
++    </data>
++</odoo>
+diff --git a/cw_client_code_approval/views/menu_action.xml b/cw_client_code_approval/views/menu_action.xml
+new file mode 100644
+index 0000000..ca36930
+--- /dev/null
++++ b/cw_client_code_approval/views/menu_action.xml
+@@ -0,0 +1,51 @@
++<?xml version="1.0" encoding="utf-8"?>
++<odoo>
++    <data noupdate="0">
++
++        <!--
++            Approver-only worklist: "Clients Pending Codes"
++
++            One screen showing every Client partner with no client_code
++            assigned. The approver opens it, batch-assigns codes, and
++            the per-partner write hook clears the linked activity and
++            triggers retry-generation of any sourcing references that
++            were waiting on the code.
++
++            Visible only to members of group_client_code_approver via
++            the menu's groups_id. The action itself is also gated by
++            groups so a direct URL hit returns "access denied" for
++            non-approvers.
++        -->
++        <record id="action_clients_pending_codes" model="ir.actions.act_window">
++            <field name="name">Clients Pending Codes</field>
++            <field name="res_model">res.partner</field>
++            <field name="view_mode">list,form</field>
++            <field name="domain">[('contact_type', '=', 'client'), ('client_code', '=', False)]</field>
++            <field name="context">{'default_contact_type': 'client'}</field>
++            <field name="group_ids" eval="[(4, ref('cw_client_code_approval.group_client_code_approver'))]"/>
++            <field name="help" type="html">
++                <p class="o_view_nocontent_smiling_face">
++                    No clients are waiting for a code.
++                </p>
++                <p>
++                    When a Merchandiser saves a Client partner without a 2-letter
++                    Code, it lands here. Set the Client Code on the partner form;
++                    the linked "Assign Client Code" activity will clear automatically.
++                </p>
++            </field>
++        </record>
++
++        <!--
++            Menu placement: top-level "Contacts" app, alongside the
++            standard Contacts list. Restricted to approvers via
++            group_ids so merchandisers never see it.
++        -->
++        <menuitem id="menu_clients_pending_codes"
++                  name="Clients Pending Codes"
++                  parent="contacts.menu_contacts"
++                  action="action_clients_pending_codes"
++                  sequence="50"
++                  groups="cw_client_code_approval.group_client_code_approver"/>
++
++    </data>
++</odoo>
+diff --git a/cw_client_code_approval/views/res_partner_views.xml b/cw_client_code_approval/views/res_partner_views.xml
+new file mode 100644
+index 0000000..51f4043
+--- /dev/null
++++ b/cw_client_code_approval/views/res_partner_views.xml
+@@ -0,0 +1,35 @@
++<?xml version="1.0" encoding="utf-8"?>
++<odoo>
++
++    <!--
++        Patch the cw_contacts_phase1 partner form: make client_code
++        read-only for everyone EXCEPT members of the Client Code
++        Approver group. Defense-in-depth — the server-side write()
++        override in res_partner.py is the authoritative guard.
++
++        Uses the computed `can_assign_client_code` field as the
++        readonly toggle. Computed has depends_context('uid'), so it
++        re-evaluates per user.
++    -->
++    <record id="view_partner_form_client_code_approval" model="ir.ui.view">
++        <field name="name">res.partner.form.cw.client.code.approval</field>
++        <field name="model">res.partner</field>
++        <field name="inherit_id" ref="cw_contacts_phase1.view_partner_form_cw_phase1"/>
++        <field name="arch" type="xml">
++
++            <!-- Inject the gating boolean into the form so the readonly
++                 expression on client_code can reference it. -->
++            <xpath expr="//field[@name='client_code']" position="before">
++                <field name="can_assign_client_code" invisible="1"/>
++            </xpath>
++
++            <xpath expr="//field[@name='client_code']" position="attributes">
++                <attribute name="readonly">not can_assign_client_code</attribute>
++                <attribute name="placeholder">2 letters, assigned by Howard or Eva</attribute>
++                <attribute name="help">Read-only for everyone except members of the "Client Code Approver" group (Howard, Eva). Save the client without a code if you don't have one yet — an assignment request will be sent automatically.</attribute>
++            </xpath>
++
++        </field>
++    </record>
++
++</odoo>
+-- 
+2.34.1
+

@@ -1,0 +1,314 @@
+From 9a9e7c03f2ae00ddeb801f720695170eaa1d59f1 Mon Sep 17 00:00:00 2001
+From: cwintlhk <howardcheng@courtwell.com.hk>
+Date: Mon, 8 Jun 2026 11:35:10 +0200
+Subject: [PATCH 03/14] cw_contacts_phase1: lookup-model service provider types
+ (19.0.1.1.0)
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Replaces the hardcoded service_provider_type Selection field with a
+Many2one to a new cw.service.provider.type lookup model. Admins can
+now add new types via the UI without a code release, and the field
+is tracking-enabled so changes show in chatter.
+
+  * New model cw.service.provider.type — name, code, sequence, active,
+    description; UNIQUE on (code) and (name).
+  * Seed data restores the 4 original values (Freight Forwarder,
+    Inspection Company, Customs Broker, Testing Lab) as records with
+    noupdate=1 so admins can rename them post-install without losing
+    the override on the next module update.
+  * Migration 19.0.1.1.0 — pre + post scripts read the old Selection
+    column values and rewrite them as FK references to the matching
+    seed records. Existing partners keep their Service Provider Type
+    classification through the upgrade.
+  * Field rename on res.partner: service_provider_type (Selection) ->
+    service_provider_type_id (Many2one). @api.constrains and the
+    contact_type cleanup onchange updated to match.
+  * ACL: cw.service.provider.type is read/write/create for all
+    internal users (so they can add types inline from the dropdown);
+    delete restricted to base.group_system.
+---
+ cw_contacts_phase1/__manifest__.py            |  3 +-
+ .../data/cw_service_provider_type_data.xml    | 28 +++++++++++
+ .../migrations/19.0.1.1.0/post-migration.py   | 48 +++++++++++++++++++
+ .../migrations/19.0.1.1.0/pre-migration.py    | 36 ++++++++++++++
+ cw_contacts_phase1/models/__init__.py         |  1 +
+ .../models/cw_service_provider_type.py        | 25 ++++++++++
+ cw_contacts_phase1/models/res_partner.py      | 21 ++++----
+ .../security/ir.model.access.csv              |  2 +
+ .../views/res_partner_views.xml               |  5 +-
+ 9 files changed, 155 insertions(+), 14 deletions(-)
+ create mode 100644 cw_contacts_phase1/data/cw_service_provider_type_data.xml
+ create mode 100644 cw_contacts_phase1/migrations/19.0.1.1.0/post-migration.py
+ create mode 100644 cw_contacts_phase1/migrations/19.0.1.1.0/pre-migration.py
+ create mode 100644 cw_contacts_phase1/models/cw_service_provider_type.py
+
+diff --git a/cw_contacts_phase1/__manifest__.py b/cw_contacts_phase1/__manifest__.py
+index e73de3d..0e9f16b 100644
+--- a/cw_contacts_phase1/__manifest__.py
++++ b/cw_contacts_phase1/__manifest__.py
+@@ -1,6 +1,6 @@
+ {
+     'name': 'CW Contacts — Phase 1',
+-    'version': '19.0.1.0.0',
++    'version': '19.0.1.1.0',
+     'summary': 'Contact Type classification, Client/Supplier/Service Provider profiles, '
+                'custom activity types',
+     'description': """
+@@ -29,6 +29,7 @@ live in the sourcing_reference module.
+     ],
+     'data': [
+         'security/ir.model.access.csv',
++        'data/cw_service_provider_type_data.xml',
+         'views/res_partner_views.xml',
+         'data/mail_activity_type_data.xml',
+         'data/res_partner_industry_data.xml',
+diff --git a/cw_contacts_phase1/data/cw_service_provider_type_data.xml b/cw_contacts_phase1/data/cw_service_provider_type_data.xml
+new file mode 100644
+index 0000000..8a8f043
+--- /dev/null
++++ b/cw_contacts_phase1/data/cw_service_provider_type_data.xml
+@@ -0,0 +1,28 @@
++<?xml version="1.0" encoding="utf-8"?>
++<odoo noupdate="1">
++
++    <record id="spt_freight" model="cw.service.provider.type">
++        <field name="name">Freight Forwarder</field>
++        <field name="code">freight</field>
++        <field name="sequence">10</field>
++    </record>
++
++    <record id="spt_inspection" model="cw.service.provider.type">
++        <field name="name">Inspection Company</field>
++        <field name="code">inspection</field>
++        <field name="sequence">20</field>
++    </record>
++
++    <record id="spt_customs" model="cw.service.provider.type">
++        <field name="name">Customs Broker</field>
++        <field name="code">customs</field>
++        <field name="sequence">30</field>
++    </record>
++
++    <record id="spt_testing" model="cw.service.provider.type">
++        <field name="name">Testing Lab / Certification Body</field>
++        <field name="code">testing</field>
++        <field name="sequence">40</field>
++    </record>
++
++</odoo>
+diff --git a/cw_contacts_phase1/migrations/19.0.1.1.0/post-migration.py b/cw_contacts_phase1/migrations/19.0.1.1.0/post-migration.py
+new file mode 100644
+index 0000000..bfceaed
+--- /dev/null
++++ b/cw_contacts_phase1/migrations/19.0.1.1.0/post-migration.py
+@@ -0,0 +1,48 @@
++"""
++Post-migration for 19.0.1.0.0 → 19.0.1.1.0
++
++Translate legacy text values of `service_provider_type` to FK references on
++`service_provider_type_id`, then drop the legacy column.
++"""
++
++
++def migrate(cr, version):
++    if not version:
++        return
++
++    cr.execute("""
++        SELECT 1 FROM information_schema.columns
++        WHERE table_name = 'res_partner' AND column_name = 'service_provider_type_legacy'
++    """)
++    if not cr.fetchone():
++        return
++
++    cr.execute("""
++        UPDATE res_partner p
++        SET service_provider_type_id = spt.id
++        FROM cw_service_provider_type spt
++        WHERE p.service_provider_type_legacy IS NOT NULL
++          AND spt.code = p.service_provider_type_legacy
++          AND p.service_provider_type_id IS NULL
++    """)
++
++    cr.execute("""
++        SELECT DISTINCT service_provider_type_legacy
++        FROM res_partner
++        WHERE service_provider_type_legacy IS NOT NULL
++          AND service_provider_type_id IS NULL
++    """)
++    unmapped = [row[0] for row in cr.fetchall()]
++    if unmapped:
++        # Surface in the upgrade log so the admin can decide; do not block.
++        import logging
++        _logger = logging.getLogger(__name__)
++        _logger.warning(
++            "cw_contacts_phase1 upgrade: %d distinct service_provider_type "
++            "values could not be mapped to a cw.service.provider.type record: %s. "
++            "The legacy column will be dropped — these values are lost. "
++            "Roll back via the legacy column backup if needed.",
++            len(unmapped), unmapped,
++        )
++
++    cr.execute("ALTER TABLE res_partner DROP COLUMN service_provider_type_legacy")
+diff --git a/cw_contacts_phase1/migrations/19.0.1.1.0/pre-migration.py b/cw_contacts_phase1/migrations/19.0.1.1.0/pre-migration.py
+new file mode 100644
+index 0000000..382dfa8
+--- /dev/null
++++ b/cw_contacts_phase1/migrations/19.0.1.1.0/pre-migration.py
+@@ -0,0 +1,36 @@
++"""
++Pre-migration for 19.0.1.0.0 → 19.0.1.1.0
++
++Field `res.partner.service_provider_type` is changing type from
++`Selection` (text column) to `Many2one` (integer FK column).
++
++This script preserves the old text values by renaming the existing column
++to `service_provider_type_legacy`. The post-migration then translates each
++legacy code → new cw.service.provider.type record ID and drops the legacy
++column.
++"""
++
++
++def migrate(cr, version):
++    if not version:
++        return
++
++    # Bail out if the rename already happened (re-run safety).
++    cr.execute("""
++        SELECT 1 FROM information_schema.columns
++        WHERE table_name = 'res_partner' AND column_name = 'service_provider_type_legacy'
++    """)
++    if cr.fetchone():
++        return
++
++    cr.execute("""
++        SELECT 1 FROM information_schema.columns
++        WHERE table_name = 'res_partner' AND column_name = 'service_provider_type'
++    """)
++    if not cr.fetchone():
++        return
++
++    cr.execute("""
++        ALTER TABLE res_partner
++        RENAME COLUMN service_provider_type TO service_provider_type_legacy
++    """)
+diff --git a/cw_contacts_phase1/models/__init__.py b/cw_contacts_phase1/models/__init__.py
+index 11061e1..7f7d2d3 100644
+--- a/cw_contacts_phase1/models/__init__.py
++++ b/cw_contacts_phase1/models/__init__.py
+@@ -1,2 +1,3 @@
+ from . import cw_tags
++from . import cw_service_provider_type
+ from . import res_partner
+diff --git a/cw_contacts_phase1/models/cw_service_provider_type.py b/cw_contacts_phase1/models/cw_service_provider_type.py
+new file mode 100644
+index 0000000..25e2341
+--- /dev/null
++++ b/cw_contacts_phase1/models/cw_service_provider_type.py
+@@ -0,0 +1,25 @@
++from odoo import fields, models
++
++
++class CwServiceProviderType(models.Model):
++    _name = 'cw.service.provider.type'
++    _description = 'Service Provider Type'
++    _order = 'sequence, name'
++    _rec_names_search = ['name', 'code']
++
++    name = fields.Char(required=True, translate=True)
++    code = fields.Char(
++        help='Stable identifier for ETL / reporting. Optional but recommended '
++             'on seeded values so external systems can reference a type without '
++             'being affected by display-name changes.',
++    )
++    sequence = fields.Integer(default=10)
++    active = fields.Boolean(default=True)
++    description = fields.Char(help='Short hint shown in the dropdown / tooltip.')
++
++    _sql_constraints = [
++        ('code_uniq', 'UNIQUE(code)',
++         'Service Provider Type code must be unique.'),
++        ('name_uniq', 'UNIQUE(name)',
++         'Service Provider Type name must be unique.'),
++    ]
+diff --git a/cw_contacts_phase1/models/res_partner.py b/cw_contacts_phase1/models/res_partner.py
+index 83e2c97..b4d831d 100644
+--- a/cw_contacts_phase1/models/res_partner.py
++++ b/cw_contacts_phase1/models/res_partner.py
+@@ -86,15 +86,14 @@ class ResPartner(models.Model):
+              'role-based access, and downstream sourcing workflows.',
+     )
+ 
+-    service_provider_type = fields.Selection(
+-        [
+-            ('freight', 'Freight Forwarder'),
+-            ('inspection', 'Inspection Company'),
+-            ('customs', 'Customs Broker'),
+-            ('testing', 'Testing Lab / Certification Body'),
+-        ],
++    service_provider_type_id = fields.Many2one(
++        'cw.service.provider.type',
+         string='Service Provider Type',
+-        help='Visible only when Contact Type = Service Provider.',
++        ondelete='restrict',
++        tracking=True,
++        help='Visible only when Contact Type = Service Provider. Users with '
++             'create access on cw.service.provider.type can add new types '
++             'inline via the dropdown.',
+     )
+ 
+     # ------------------------------------------------------------------
+@@ -426,10 +425,10 @@ class ResPartner(models.Model):
+                         f'all clients.'
+                     )
+ 
+-    @api.constrains('contact_type', 'service_provider_type')
++    @api.constrains('contact_type', 'service_provider_type_id')
+     def _check_service_provider_type(self):
+         for rec in self:
+-            if rec.service_provider_type and rec.contact_type != 'service_provider':
++            if rec.service_provider_type_id and rec.contact_type != 'service_provider':
+                 raise ValidationError(
+                     'Service Provider Type may only be set when Contact Type '
+                     '= Service Provider.'
+@@ -452,7 +451,7 @@ class ResPartner(models.Model):
+                 rec.customer_rank = 0
+                 rec.supplier_rank = 0
+             if rec.contact_type != 'service_provider':
+-                rec.service_provider_type = False
++                rec.service_provider_type_id = False
+ 
+     @api.onchange('client_code')
+     def _onchange_client_code_uppercase(self):
+diff --git a/cw_contacts_phase1/security/ir.model.access.csv b/cw_contacts_phase1/security/ir.model.access.csv
+index 2125798..35aaa3b 100644
+--- a/cw_contacts_phase1/security/ir.model.access.csv
++++ b/cw_contacts_phase1/security/ir.model.access.csv
+@@ -7,3 +7,5 @@ access_cw_coverage_market_user,cw.coverage.market user,model_cw_coverage_market,
+ access_cw_coverage_market_admin,cw.coverage.market admin,model_cw_coverage_market,base.group_system,1,1,1,1
+ access_cw_service_offered_user,cw.service.offered user,model_cw_service_offered,base.group_user,1,0,0,0
+ access_cw_service_offered_admin,cw.service.offered admin,model_cw_service_offered,base.group_system,1,1,1,1
++access_cw_service_provider_type_user,cw.service.provider.type user,model_cw_service_provider_type,base.group_user,1,1,1,0
++access_cw_service_provider_type_admin,cw.service.provider.type admin,model_cw_service_provider_type,base.group_system,1,1,1,1
+diff --git a/cw_contacts_phase1/views/res_partner_views.xml b/cw_contacts_phase1/views/res_partner_views.xml
+index 36861ae..657ee3a 100644
+--- a/cw_contacts_phase1/views/res_partner_views.xml
++++ b/cw_contacts_phase1/views/res_partner_views.xml
+@@ -19,9 +19,10 @@
+                 <group>
+                     <group>
+                         <field name="contact_type"/>
+-                        <field name="service_provider_type"
++                        <field name="service_provider_type_id"
+                                invisible="contact_type != 'service_provider'"
+-                               required="contact_type == 'service_provider'"/>
++                               required="contact_type == 'service_provider'"
++                               options="{'no_quick_create': False}"/>
+                     </group>
+                     <group>
+                         <field name="client_code"
+-- 
+2.34.1
+

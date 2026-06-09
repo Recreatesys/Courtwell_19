@@ -1,0 +1,1220 @@
+From aeb69b84422888b24efe79e51077a132da4941a5 Mon Sep 17 00:00:00 2001
+From: cwintlhk <howardcheng@courtwell.com.hk>
+Date: Mon, 8 Jun 2026 11:11:12 +0200
+Subject: [PATCH 02/14] sourcing_reference: per-supplier letter allocation in
+ RFQ ID (19.0.1.2.0)
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Switches supplier-side RFQ IDs from RQ-{Prov}-{Seg}-{YY}-{NNN}
+(pool-wide year-stamped sequence) to RQ-{Prov}-{Seg}-{Letter}-{NNN}
+where Letter is the supplier's permanent index within the pool
+(A, B, ..., Z, AA, ...) and NNN is the per-supplier RFQ count in
+that pool. Two manufacturers in the same Province / Segment are now
+distinguishable from the ID alone, fixing a real ambiguity flagged
+by merchandisers.
+
+  * New model sourcing.supplier.pool.member — one row per
+    (Province, Segment, Supplier) with permanent Letter + per-supplier
+    count. Concurrency-safe via SELECT ... FOR UPDATE on pool + member.
+  * Extends sourcing.supplier.sequence with next_letter_index for
+    letter allocation; existing count retained as pool-wide tally.
+  * purchase.order.opportunity_id — Many2one to crm.lead so RFQs link
+    directly to the originating opportunity (not via SO indirection).
+  * Smart button on CRM Opportunity form opens linked RFQs/POs and
+    pre-fills default_opportunity_id and default_gpc_segment_id on
+    new records — merchandiser no longer types the opportunity link.
+  * button_confirm flips RQ- to PO- prefix unconditionally after
+    generation, so a draft RFQ that fills its segment late still ends
+    up as PO- on confirmation.
+  * Legacy IDs preserved. Migration sets next_letter_index = 0 on
+    existing pool rows; opportunity_id starts NULL on legacy POs.
+  * 15 tests covering letter allocation, pool isolation, opportunity
+    inheritance, button_confirm end-to-end, and letter-encoding edges.
+  * docs/RFQ_ID_GUIDE.md — one-pager for merchandiser handoff.
+---
+ sourcing_reference/__manifest__.py            |  14 +-
+ sourcing_reference/docs/RFQ_ID_GUIDE.md       | 110 +++++++
+ .../migrations/19.0.1.2.0/post-migration.py   |  37 +++
+ sourcing_reference/models/__init__.py         |   1 +
+ sourcing_reference/models/crm_lead.py         |  35 ++
+ sourcing_reference/models/purchase_order.py   | 160 ++++++---
+ .../models/sourcing_supplier_pool_member.py   | 107 ++++++
+ .../models/sourcing_supplier_sequence.py      |  46 ++-
+ .../security/ir.model.access.csv              |   2 +
+ sourcing_reference/tests/__init__.py          |   1 +
+ .../tests/test_supplier_pool_allocation.py    | 311 ++++++++++++++++++
+ sourcing_reference/views/crm_lead_views.xml   |  11 +
+ .../views/purchase_order_views.xml            |   3 +
+ .../views/sourcing_sequence_views.xml         |  68 +++-
+ 14 files changed, 835 insertions(+), 71 deletions(-)
+ create mode 100644 sourcing_reference/docs/RFQ_ID_GUIDE.md
+ create mode 100644 sourcing_reference/migrations/19.0.1.2.0/post-migration.py
+ create mode 100644 sourcing_reference/models/sourcing_supplier_pool_member.py
+ create mode 100644 sourcing_reference/tests/__init__.py
+ create mode 100644 sourcing_reference/tests/test_supplier_pool_allocation.py
+
+diff --git a/sourcing_reference/__manifest__.py b/sourcing_reference/__manifest__.py
+index d672dd0..bd3b94d 100644
+--- a/sourcing_reference/__manifest__.py
++++ b/sourcing_reference/__manifest__.py
+@@ -1,6 +1,6 @@
+ {
+     'name': 'CW Sourcing Reference IDs',
+-    'version': '19.0.1.1.0',
++    'version': '19.0.1.2.0',
+     'summary': 'Auto-generated client/supplier reference IDs, sequence counters, '
+                'CRM pipeline stages, and propagation across SO/PO/Project',
+     'description': """
+@@ -8,10 +8,14 @@ Phase 1 — Reference ID Architecture for the boutique sourcing firm.
+ 
+ Implements the spec from §2 and §12.1:
+   * sourcing.client.sequence  — cumulative counter per (client, GS1 segment)
+-  * sourcing.supplier.sequence — cumulative counter per (province, GS1 segment)
++  * sourcing.supplier.sequence — pool counter per (province, GS1 segment)
++  * sourcing.supplier.pool.member — per-supplier letter + count within a pool
+   * crm.lead generator: OP-{ClientCode}-{Segment}-{YY}-{NNN} on entry to Quotation stage
+   * sale.order propagation: QP-... (read from lead)
+-  * purchase.order generator/propagation: RQ-{Province}-{Segment}-{YY}-{NNN}, flips to PO- on confirm
++  * purchase.order generator: RQ-{Province}-{Segment}-{Letter}-{NNN},
++    flips to PO- on confirm. Letter is per-(province,segment) supplier index
++    (A, B, …, Z, AA, AB, …); NNN is RFQ count for that supplier in that pool.
++  * crm.lead smart button — RFQs (opens linked POs with default_opportunity_id)
+   * project.project Phase 3 hook (stub field PR-... — populated in Phase 3)
+   * Client Contact smart button — Orders (non-Lost opportunity count)
+   * 8 CRM pipeline stages (Incoming Inquiry, Quotation, Proforma Invoice,
+@@ -20,6 +24,10 @@ Implements the spec from §2 and §12.1:
+ Models sourcing.client.sequence and sourcing.supplier.sequence were originally
+ defined in cw_contacts_phase1; they are migrated here so the reference-ID
+ architecture is self-contained.
++
++v19.0.1.2.0 — RFQ ID scheme switched from {YY}-{NNN} (pool-wide sequence) to
++{Letter}-{NNN} (per-supplier letter + per-supplier RFQ count). Existing RFQs
++keep their legacy IDs; new RFQs use the new format.
+ """,
+     'author': 'CW Internal',
+     'category': 'Sales/CRM',
+diff --git a/sourcing_reference/docs/RFQ_ID_GUIDE.md b/sourcing_reference/docs/RFQ_ID_GUIDE.md
+new file mode 100644
+index 0000000..79f97c2
+--- /dev/null
++++ b/sourcing_reference/docs/RFQ_ID_GUIDE.md
+@@ -0,0 +1,110 @@
++# RFQ & PO IDs — What Changed and Why
++
++**For merchandisers issuing RFQs to suppliers.**
++
++---
++
++## 1. The new ID format
++
++```
++RQ-{Province}-{Segment}-{Letter}-{NNN}
++```
++
++Example: **`RQ-GD-50-A-001`**
++
++| Piece | Meaning |
++|---|---|
++| `RQ-` | Draft RFQ (flips to `PO-` when you confirm) |
++| `GD` | Supplier's province (Guangdong) |
++| `50` | GS1 segment for this purchase |
++| `A` | This supplier's permanent letter in the Guangdong–segment-50 pool |
++| `001` | How many RFQs you've sent **to this supplier** in this pool |
++
++When you confirm: `RQ-GD-50-A-001` → `PO-GD-50-A-001`. Body unchanged; only the prefix flips.
++
++---
++
++## 2. The problem this fixes
++
++**Old format:** `RQ-GD-50-26-007`, `RQ-GD-50-26-008`
++Two manufacturers in Guangdong both quoting segment 50 → you couldn't tell which RFQ came from which supplier without opening the record.
++
++**New format:** `RQ-GD-50-A-001`, `RQ-GD-50-B-001`
++The letter tells you which supplier — immediately, from the ID alone.
++
++---
++
++## 3. How letters are assigned
++
++Each **(Province + Segment)** is its own pool. Letters are assigned in order of first appearance:
++
++| Event | Resulting ID |
++|---|---|
++| XYZ Mfg's first RFQ in Guangdong segment 50 | `RQ-GD-50-A-001` |
++| PQR Mfg's first RFQ in same pool | `RQ-GD-50-B-001` |
++| XYZ again, same pool | `RQ-GD-50-A-002` |
++| PQR again, same pool | `RQ-GD-50-B-002` |
++| XYZ in **Zhejiang** segment 50 (different pool) | `RQ-ZJ-50-A-001` |
++| XYZ in Guangdong segment **51** (different pool) | `RQ-GD-51-A-001` |
++
++**Key rule:** A supplier's letter is permanent within a pool. If XYZ is "A" in `GD-50`, they will *always* be "A" there. The number after the letter grows each time you send them another RFQ in that pool.
++
++---
++
++## 4. New smart button in CRM
++
++Every CRM Opportunity now has an **RFQs** button at the top of the form, with a live count badge.
++
++```
++   ┌─────────────────────┐
++   │   📦 RFQs           │
++   │        2            │
++   └─────────────────────┘
++```
++
++**To issue an RFQ from an Opportunity:**
++
++1. Open the Opportunity in CRM.
++2. Click the **RFQs** smart button.
++3. Click **New** in the list that opens.
++4. The Opportunity link and GS1 Segment **auto-fill** — no typing.
++5. Pick the supplier.
++6. Save → the RFQ ID generates automatically.
++
++You no longer need to remember or copy-paste the Opportunity reference.
++
++---
++
++## 5. Pre-requisites checklist
++
++Before the system can generate an RFQ ID, both of these must be true:
++
++- ☐ The supplier has a **Province Code** (2 letters) on their contact record
++- ☐ The RFQ has a **GS1 Segment** (auto-fills if you used the smart button)
++
++If either is missing you'll get a clear error pointing at what's missing. Fix it on the supplier or the RFQ form, then save again.
++
++---
++
++## 6. What happens to existing RFQs and POs?
++
++**Nothing.** Existing IDs (`RQ-GD-50-26-007` and similar) stay exactly as they are. Don't rename them.
++
++Only RFQs created from this point onward use the new format. Both formats can coexist — they're distinct enough that you'll always know which is which.
++
++---
++
++## 7. Quick reference card
++
++| Symbol in ID | Means |
++|---|---|
++| `RQ-…` | Draft RFQ awaiting supplier quote or your confirmation |
++| `PO-…` | Confirmed PO — supplier is committed |
++| Letter (A, B, C…) | Which supplier within this (Province + Segment) pool |
++| NNN | How many RFQs we've sent this supplier in this pool |
++
++When in doubt: open the record. The supplier name, opportunity link, and segment are all on the form. The ID is shorthand — the database holds the full picture.
++
++---
++
++*Questions? Talk to the General Manager or the IT support contact.*
+diff --git a/sourcing_reference/migrations/19.0.1.2.0/post-migration.py b/sourcing_reference/migrations/19.0.1.2.0/post-migration.py
+new file mode 100644
+index 0000000..d318e0c
+--- /dev/null
++++ b/sourcing_reference/migrations/19.0.1.2.0/post-migration.py
+@@ -0,0 +1,37 @@
++"""Post-migration for 19.0.1.1.0 -> 19.0.1.2.0
++
++Switches supplier-side RFQ IDs from YY-NNN (pool-wide sequence) to
++Letter-NNN (per-supplier letter + per-supplier count).
++
++  - Existing `sourcing_supplier_sequence.count` is left intact as the
++    pool-wide RFQ tally (used for reporting).
++  - New column `next_letter_index` defaults to 0 on every existing pool;
++    letters are allocated lazily as new RFQs come in under the new
++    scheme. Legacy suppliers do not get retroactive letter assignments.
++  - Existing purchase.order rows keep their legacy `RQ-...-YY-NNN` /
++    `PO-...-YY-NNN` references; only newly issued RFQs use the new
++    `RQ-...-Letter-NNN` shape.
++  - The new `purchase_order.opportunity_id` FK starts NULL. Linkage
++    against existing POs is not backfilled — operationally there is no
++    reliable way to associate legacy POs with their originating
++    opportunity post hoc.
++"""
++
++import logging
++
++_logger = logging.getLogger(__name__)
++
++
++def migrate(cr, version):
++    if not version:
++        return
++
++    cr.execute(
++        "UPDATE sourcing_supplier_sequence "
++        "SET next_letter_index = 0 "
++        "WHERE next_letter_index IS NULL"
++    )
++    _logger.info(
++        "sourcing_reference 19.0.1.2.0: initialized next_letter_index "
++        "on %s pool row(s).", cr.rowcount,
++    )
+diff --git a/sourcing_reference/models/__init__.py b/sourcing_reference/models/__init__.py
+index e686c6f..52e8e4c 100644
+--- a/sourcing_reference/models/__init__.py
++++ b/sourcing_reference/models/__init__.py
+@@ -1,5 +1,6 @@
+ from . import sourcing_client_sequence
+ from . import sourcing_supplier_sequence
++from . import sourcing_supplier_pool_member
+ from . import crm_lead
+ from . import sale_order
+ from . import purchase_order
+diff --git a/sourcing_reference/models/crm_lead.py b/sourcing_reference/models/crm_lead.py
+index 5cd300b..d7a11b1 100644
+--- a/sourcing_reference/models/crm_lead.py
++++ b/sourcing_reference/models/crm_lead.py
+@@ -43,6 +43,21 @@ class CrmLead(models.Model):
+         string='GS1 Segment Code',
+     )
+ 
++    purchase_order_ids = fields.One2many(
++        'purchase.order',
++        'opportunity_id',
++        string='RFQs / POs',
++    )
++    purchase_order_count = fields.Integer(
++        compute='_compute_purchase_order_count',
++        string='RFQ Count',
++    )
++
++    @api.depends('purchase_order_ids')
++    def _compute_purchase_order_count(self):
++        for lead in self:
++            lead.purchase_order_count = len(lead.purchase_order_ids)
++
+     @api.onchange('gpc_segment_id')
+     def _onchange_gpc_segment_clear_class(self):
+         for lead in self:
+@@ -178,3 +193,23 @@ class CrmLead(models.Model):
+             ],
+             'context': {'default_partner_id': self.partner_id.id},
+         }
++
++    def action_view_rfqs(self):
++        """Smart-button action — opens RFQs/POs linked to this opportunity.
++
++        New RFQs created from this action pre-fill `opportunity_id` and
++        `gpc_segment_id` via context defaults. `partner_id` is intentionally
++        not defaulted — the PO partner is the supplier, not the client.
++        """
++        self.ensure_one()
++        return {
++            'type': 'ir.actions.act_window',
++            'name': _('RFQs / POs for %s') % (self.sourcing_reference or self.name or ''),
++            'res_model': 'purchase.order',
++            'view_mode': 'list,form',
++            'domain': [('opportunity_id', '=', self.id)],
++            'context': {
++                'default_opportunity_id': self.id,
++                'default_gpc_segment_id': self.gpc_segment_id.id or False,
++            },
++        }
+diff --git a/sourcing_reference/models/purchase_order.py b/sourcing_reference/models/purchase_order.py
+index 544e137..ab26ae5 100644
+--- a/sourcing_reference/models/purchase_order.py
++++ b/sourcing_reference/models/purchase_order.py
+@@ -15,9 +15,21 @@ class PurchaseOrder(models.Model):
+         copy=False,
+         index=True,
+         tracking=True,
+-        help='Format: RQ-{Province}-{Segment}-{YY}-{NNN} while in RFQ; '
+-             'flips to PO- on confirmation. If linked to a Sale Order with '
+-             'an existing reference, inherits that reference with PO- prefix.',
++        help='Format: RQ-{Province}-{Segment}-{Letter}-{NNN} while in RFQ; '
++             'flips to PO- on confirmation. Letter is the supplier\'s permanent '
++             'index within the (Province, Segment) pool (A, B, …, Z, AA, AB, …); '
++             'NNN is the per-supplier RFQ count in that pool.',
++    )
++
++    opportunity_id = fields.Many2one(
++        'crm.lead',
++        string='Opportunity',
++        index=True,
++        ondelete='restrict',
++        tracking=True,
++        help='CRM opportunity this RFQ/PO serves. Auto-populated when the RFQ '
++             'is created via the smart button on a CRM Opportunity. Drives '
++             'inheritance of GS1 Segment from the opportunity.',
+     )
+ 
+     gpc_segment_id = fields.Many2one(
+@@ -29,48 +41,37 @@ class PurchaseOrder(models.Model):
+              'where applicable; entered manually for standalone RFQs.',
+     )
+ 
+-    def _resolve_so_origin(self):
+-        """Return the originating sale.order for this PO, if any.
+-
+-        Looks up via auto-created PO origin link (purchase.order_id field
+-        on sale.order in standard Odoo, or purchase.order.origin string).
+-        """
++    def _inherit_segment_from_opportunity(self):
++        """Fill `gpc_segment_id` from the linked opportunity if not set."""
+         self.ensure_one()
+-        Sale = self.env['sale.order']
+-        so = Sale.search([('name', '=', self.origin)], limit=1) if self.origin else Sale
+-        return so
+-
+-    def _try_inherit_from_so(self):
+-        self.ensure_one()
+-        if self.sourcing_reference:
+-            return False
+-        so = self._resolve_so_origin()
+-        if not so or not so.sourcing_reference:
+-            return False
+-        base = so.sourcing_reference.strip()
+-        if base.startswith('QP-'):
+-            self.sourcing_reference = 'PO-' + base[3:]
+-            if not self.gpc_segment_id and so.opportunity_id and so.opportunity_id.gpc_segment_id:
+-                self.gpc_segment_id = so.opportunity_id.gpc_segment_id
+-            return True
+-        return False
++        if self.gpc_segment_id or not self.opportunity_id:
++            return
++        if self.opportunity_id.gpc_segment_id:
++            self.gpc_segment_id = self.opportunity_id.gpc_segment_id
+ 
+     def _generate_supplier_reference(self):
+-        """Generate RQ-{prov}-{seg}-{YY}-{NNN} for standalone RFQs.
++        """Generate RQ-{prov}-{seg}-{letter}-{NNN} for this RFQ.
+ 
+-        Validates province_code on supplier and gpc_segment_id on order.
+-        Concurrency-safe via row-level lock on the sequence row.
++        Letter is allocated once per (supplier × pool) and reused on every
++        subsequent RFQ to that supplier in that pool. NNN is the per-supplier
++        count in the pool, incrementing per RFQ.
++
++        Concurrency: SELECT … FOR UPDATE on the pool row serializes letter
++        allocation; a second FOR UPDATE on the member row serializes count
++        increments for the same supplier.
+         """
+         self.ensure_one()
+         if self.sourcing_reference:
+             return
++
+         partner = self.partner_id
+         prov = (partner.province_code or '').strip().upper() if partner else ''
+         if not prov or len(prov) != 2 or not prov.isalpha():
+             raise UserError(_(
+                 "Province Code missing on this supplier record (%(name)s). "
+-                "Update the supplier profile before issuing an RFQ."
+-            ) % {'name': partner.display_name if partner else '—'})
++                "Update the supplier profile before issuing an RFQ.",
++                name=partner.display_name if partner else '—',
++            ))
+ 
+         if not self.gpc_segment_id or not self.gpc_segment_id.code:
+             raise UserError(_(
+@@ -79,30 +80,78 @@ class PurchaseOrder(models.Model):
+             ))
+         seg = self.gpc_segment_id.code
+ 
+-        Seq = self.env['sourcing.supplier.sequence'].sudo()
+-        seq = Seq.search([
++        Pool = self.env['sourcing.supplier.sequence'].sudo()
++        Member = self.env['sourcing.supplier.pool.member'].sudo()
++
++        pool = Pool.search([
++            ('province_code', '=', prov),
++            ('gpc_segment', '=', seg),
++        ], limit=1)
++        if not pool:
++            pool = Pool.create({
++                'province_code': prov,
++                'gpc_segment': seg,
++                'count': 0,
++                'next_letter_index': 0,
++            })
++
++        # Flush any pending ORM writes (pool/member updates from a prior
++        # RFQ in the same transaction, or the Pool.create() just above)
++        # so the raw SELECT FOR UPDATE below reads the latest values from
++        # the database, not stale ORM cache. Required for correctness when
++        # multiple RFQs are created in one DB transaction.
++        self.env.flush_all()
++
++        # Lock the pool row to serialize letter allocation and pool count.
++        self.env.cr.execute(
++            "SELECT next_letter_index, count "
++            "FROM sourcing_supplier_sequence WHERE id = %s FOR UPDATE",
++            (pool.id,),
++        )
++        pool_row = self.env.cr.fetchone()
++        next_idx = pool_row[0] if pool_row else 0
++        pool_count = pool_row[1] if pool_row else 0
++
++        member = Member.search([
+             ('province_code', '=', prov),
+             ('gpc_segment', '=', seg),
++            ('partner_id', '=', partner.id),
+         ], limit=1)
+-        if seq:
++
++        if member:
++            # Existing supplier in this pool — reuse letter, bump count.
+             self.env.cr.execute(
+-                "SELECT count FROM sourcing_supplier_sequence WHERE id = %s FOR UPDATE",
+-                (seq.id,),
++                "SELECT count FROM sourcing_supplier_pool_member "
++                "WHERE id = %s FOR UPDATE",
++                (member.id,),
+             )
+-            row = self.env.cr.fetchone()
+-            new_count = (row[0] if row else 0) + 1
+-            seq.write({'count': new_count})
++            member_row = self.env.cr.fetchone()
++            new_member_count = (member_row[0] if member_row else 0) + 1
++            member.write({'count': new_member_count})
++            letter = member.letter
+         else:
+-            seq = Seq.create({
++            # First RFQ to this supplier in this pool — allocate next letter.
++            letter = Member._index_to_letter(next_idx)
++            member = Member.create({
+                 'province_code': prov,
+                 'gpc_segment': seg,
++                'partner_id': partner.id,
++                'letter': letter,
+                 'count': 1,
+             })
+-            new_count = 1
++            new_member_count = 1
++            pool.write({'next_letter_index': next_idx + 1})
+ 
+-        yy = fields.Date.context_today(self).strftime('%y')
+-        self.sourcing_reference = f"RQ-{prov}-{seg}-{yy}-{new_count:03d}"
+-        self.message_post(body=_("Sourcing Reference generated: %s") % self.sourcing_reference)
++        pool.write({'count': pool_count + 1})
++
++        ref = f"RQ-{prov}-{seg}-{letter}-{new_member_count:03d}"
++        self.sourcing_reference = ref
++        self.message_post(body=_("Sourcing Reference generated: %s") % ref)
++        _logger.info(
++            "purchase.order %s: generated sourcing_reference %s "
++            "(pool=%s-%s, supplier=%s, letter=%s, supplier_count=%s)",
++            self.id, ref, prov, seg, partner.display_name, letter, new_member_count,
++        )
+ 
+     @api.model_create_multi
+     def create(self, vals_list):
+@@ -110,21 +159,26 @@ class PurchaseOrder(models.Model):
+         for order in orders:
+             if order.sourcing_reference:
+                 continue
+-            if order._try_inherit_from_so():
+-                continue
+-            if order.partner_id and order.partner_id.province_code and order.gpc_segment_id:
++            order._inherit_segment_from_opportunity()
++            if (
++                order.partner_id
++                and order.partner_id.province_code
++                and order.gpc_segment_id
++            ):
+                 try:
+                     order._generate_supplier_reference()
+                 except UserError:
++                    # Missing province/segment surfaces again at confirmation.
+                     pass
+         return orders
+ 
+     def button_confirm(self):
+         for order in self:
+             if not order.sourcing_reference:
+-                order._try_inherit_from_so()
+-                if not order.sourcing_reference:
+-                    order._generate_supplier_reference()
+-            elif order.sourcing_reference.startswith('RQ-'):
++                order._inherit_segment_from_opportunity()
++                order._generate_supplier_reference()
++            # Always flip RQ- → PO- on confirmation, whether the reference
++            # was pre-existing or just generated above.
++            if order.sourcing_reference and order.sourcing_reference.startswith('RQ-'):
+                 order.sourcing_reference = 'PO-' + order.sourcing_reference[3:]
+-        return super().button_confirm()
++        return super().button_confirm()
+\ No newline at end of file
+diff --git a/sourcing_reference/models/sourcing_supplier_pool_member.py b/sourcing_reference/models/sourcing_supplier_pool_member.py
+new file mode 100644
+index 0000000..c8faf8a
+--- /dev/null
++++ b/sourcing_reference/models/sourcing_supplier_pool_member.py
+@@ -0,0 +1,107 @@
++from odoo import api, fields, models
++from odoo.exceptions import ValidationError
++
++
++class SourcingSupplierPoolMember(models.Model):
++    """One row per supplier × (province, segment) pool.
++
++    Stores the supplier's permanent letter within the pool (A, B, …, Z,
++    AA, AB, …) and the per-supplier RFQ count used as the NNN component
++    of `RQ-{prov}-{seg}-{letter}-{NNN}`.
++
++    Allocation rule: when a supplier issues their first RFQ in a pool,
++    they take the pool's `next_letter_index` (decoded to a letter) and
++    the pool advances. The letter is then permanent for that supplier
++    in that pool — re-engaging the same supplier reuses their letter
++    and only increments `count`.
++    """
++
++    _name = 'sourcing.supplier.pool.member'
++    _description = 'Sourcing — Supplier Pool Membership'
++    _order = 'province_code, gpc_segment, letter'
++    _rec_name = 'display_name'
++
++    province_code = fields.Char(
++        string='Province / Country Code',
++        size=2,
++        required=True,
++        index=True,
++    )
++    gpc_segment = fields.Char(
++        string='GS1 Segment Code',
++        size=2,
++        required=True,
++        index=True,
++    )
++    partner_id = fields.Many2one(
++        'res.partner',
++        string='Supplier',
++        required=True,
++        index=True,
++        ondelete='restrict',
++    )
++    letter = fields.Char(
++        string='Pool Letter',
++        size=2,
++        required=True,
++        index=True,
++        help='Permanent supplier-letter within this (Province × Segment) pool. '
++             'Allocated A, B, …, Z, AA, AB, … in order of first RFQ in the pool.',
++    )
++    count = fields.Integer(
++        string='RFQ Count',
++        default=0,
++        help='Number of RFQs issued to this supplier in this pool. '
++             'Drives the NNN component of the RFQ/PO reference ID.',
++    )
++    display_name = fields.Char(compute='_compute_display_name', store=True)
++
++    _sql_constraints = [
++        ('pool_partner_uniq',
++         'UNIQUE(province_code, gpc_segment, partner_id)',
++         'A supplier may only have one membership row per (Province, Segment) pool.'),
++        ('pool_letter_uniq',
++         'UNIQUE(province_code, gpc_segment, letter)',
++         'Two suppliers cannot share the same letter within one pool.'),
++    ]
++
++    @api.depends('province_code', 'gpc_segment', 'partner_id', 'letter', 'count')
++    def _compute_display_name(self):
++        for rec in self:
++            supplier = rec.partner_id.display_name if rec.partner_id else '—'
++            rec.display_name = (
++                f'{rec.province_code or "??"}-{rec.gpc_segment or "??"}-'
++                f'{rec.letter or "?"} · {supplier} → {rec.count}'
++            )
++
++    @api.constrains('letter')
++    def _check_letter(self):
++        for rec in self:
++            if not rec.letter:
++                continue
++            if len(rec.letter) not in (1, 2) or not rec.letter.isalpha() or not rec.letter.isupper():
++                raise ValidationError(
++                    'Pool letter must be 1 or 2 uppercase letters (A–Z, AA–ZZ).'
++                )
++
++    @api.constrains('count')
++    def _check_count_non_negative(self):
++        for rec in self:
++            if rec.count < 0:
++                raise ValidationError('RFQ count cannot be negative.')
++
++    @api.model
++    def _index_to_letter(self, idx):
++        """0→A, 25→Z, 26→AA, 27→AB, …, 701→ZZ."""
++        if idx < 0:
++            raise ValueError('Letter index must be non-negative')
++        if idx < 26:
++            return chr(ord('A') + idx)
++        offset = idx - 26
++        if offset >= 26 * 26:
++            raise ValueError(
++                f'Pool letter index {idx} exceeds two-letter capacity (max 701).'
++            )
++        first = chr(ord('A') + offset // 26)
++        second = chr(ord('A') + offset % 26)
++        return first + second
+\ No newline at end of file
+diff --git a/sourcing_reference/models/sourcing_supplier_sequence.py b/sourcing_reference/models/sourcing_supplier_sequence.py
+index 54aed95..09729f7 100644
+--- a/sourcing_reference/models/sourcing_supplier_sequence.py
++++ b/sourcing_reference/models/sourcing_supplier_sequence.py
+@@ -3,17 +3,19 @@ from odoo.exceptions import ValidationError
+ 
+ 
+ class SourcingSupplierSequence(models.Model):
+-    """Cumulative RFQ counter per (province code, GS1 segment).
++    """Pool counter per (province code, GS1 segment).
+ 
+-    The Sequence component of every supplier-side Reference ID is read from
+-    here. Cumulative for the lifetime of the system. Never resets.
++    Parent row for `sourcing.supplier.pool.member` records.
++    `next_letter_index` tracks how many distinct suppliers have entered
++    this pool, used to allocate the next supplier-letter (A, B, …, Z, AA…)
++    when a brand-new supplier issues their first RFQ in this pool.
+ 
+-    Phase-1 scope: data structure only. Auto-increment hooks (on RFQ
+-    creation) are not configured in this module.
++    `count` is retained as a pool-wide RFQ tally for reporting; the
++    per-supplier operational counter lives on the pool-member row.
+     """
+ 
+     _name = 'sourcing.supplier.sequence'
+-    _description = 'Sourcing — Province × GS1 Segment Sequence Counter'
++    _description = 'Sourcing — Province × GS1 Segment Pool Counter'
+     _order = 'province_code, gpc_segment'
+     _rec_name = 'display_name'
+ 
+@@ -32,10 +34,23 @@ class SourcingSupplierSequence(models.Model):
+         index=True,
+     )
+     count = fields.Integer(
+-        string='Cumulative Count',
++        string='Pool RFQ Count',
+         default=0,
+-        help='Number of RFQs issued to date for this province × segment pair. '
+-             'Cumulative for the lifetime of the system. Never resets.',
++        help='Cumulative RFQs issued in this (Province × Segment) pool, '
++             'across all suppliers. Reporting metric only — the operational '
++             'NNN sequence lives on the pool-member row.',
++    )
++    next_letter_index = fields.Integer(
++        string='Next Letter Index',
++        default=0,
++        help='Zero-based index of the next supplier-letter to assign in this '
++             'pool. 0 → A, 1 → B, …, 25 → Z, 26 → AA, 27 → AB, … '
++             'Incremented when a brand-new supplier joins the pool.',
++    )
++    member_ids = fields.One2many(
++        'sourcing.supplier.pool.member',
++        compute='_compute_members',
++        string='Pool Members',
+     )
+     display_name = fields.Char(compute='_compute_display_name', store=True)
+ 
+@@ -45,14 +60,23 @@ class SourcingSupplierSequence(models.Model):
+          'There can only be one sequence row per (Province, GS1 Segment) pair.'),
+     ]
+ 
+-    @api.depends('province_code', 'gpc_segment', 'count')
++    @api.depends('province_code', 'gpc_segment', 'count', 'next_letter_index')
+     def _compute_display_name(self):
+         for rec in self:
+             rec.display_name = (
+                 f'{rec.province_code or "??"} × '
+-                f'{rec.gpc_segment or "??"} → {rec.count}'
++                f'{rec.gpc_segment or "??"} → {rec.count} RFQs, '
++                f'{rec.next_letter_index} suppliers'
+             )
+ 
++    def _compute_members(self):
++        Member = self.env['sourcing.supplier.pool.member']
++        for rec in self:
++            rec.member_ids = Member.search([
++                ('province_code', '=', rec.province_code),
++                ('gpc_segment', '=', rec.gpc_segment),
++            ])
++
+     @api.constrains('province_code')
+     def _check_province_code(self):
+         for rec in self:
+diff --git a/sourcing_reference/security/ir.model.access.csv b/sourcing_reference/security/ir.model.access.csv
+index 342a246..1e3a057 100644
+--- a/sourcing_reference/security/ir.model.access.csv
++++ b/sourcing_reference/security/ir.model.access.csv
+@@ -3,3 +3,5 @@ access_sourcing_client_seq_user,sourcing.client.sequence user,model_sourcing_cli
+ access_sourcing_client_seq_admin,sourcing.client.sequence admin,model_sourcing_client_sequence,base.group_system,1,1,1,1
+ access_sourcing_supplier_seq_user,sourcing.supplier.sequence user,model_sourcing_supplier_sequence,base.group_user,1,0,0,0
+ access_sourcing_supplier_seq_admin,sourcing.supplier.sequence admin,model_sourcing_supplier_sequence,base.group_system,1,1,1,1
++access_sourcing_supplier_pool_member_user,sourcing.supplier.pool.member user,model_sourcing_supplier_pool_member,base.group_user,1,0,0,0
++access_sourcing_supplier_pool_member_admin,sourcing.supplier.pool.member admin,model_sourcing_supplier_pool_member,base.group_system,1,1,1,1
+diff --git a/sourcing_reference/tests/__init__.py b/sourcing_reference/tests/__init__.py
+new file mode 100644
+index 0000000..4a0e3ed
+--- /dev/null
++++ b/sourcing_reference/tests/__init__.py
+@@ -0,0 +1 @@
++from . import test_supplier_pool_allocation
+diff --git a/sourcing_reference/tests/test_supplier_pool_allocation.py b/sourcing_reference/tests/test_supplier_pool_allocation.py
+new file mode 100644
+index 0000000..c06a4aa
+--- /dev/null
++++ b/sourcing_reference/tests/test_supplier_pool_allocation.py
+@@ -0,0 +1,311 @@
++"""Tests for supplier pool letter allocation and RFQ ID generation.
++
++Covers the v19.0.1.2.0 reference-ID scheme:
++  RQ-{Prov}-{Seg}-{Letter}-{NNN}
++
++Where:
++  - Letter is permanent per (supplier × pool); allocated A, B, …, Z, AA…
++  - NNN is per-supplier RFQ count within that pool
++
++Run from the Odoo root with:
++    odoo-bin -d <db> --test-enable --stop-after-init \\
++             -i sourcing_reference --test-tags cw_sourcing
++"""
++
++from odoo.exceptions import UserError
++from odoo.tests.common import TransactionCase, tagged
++
++
++@tagged('post_install', '-at_install', 'cw_sourcing')
++class TestSupplierPoolAllocation(TransactionCase):
++
++    @classmethod
++    def setUpClass(cls):
++        super().setUpClass()
++
++        # Clear any pre-existing pool / member rows for the (Province, Segment)
++        # combos this test class uses. The legacy 19.0.1.1.0 schema kept a
++        # cumulative `count` per pool, so a fresh-from-prod DB may already
++        # carry e.g. ('GD', '50', count=N) from prior RFQ activity. Wiping
++        # only the rows we touch keeps other pool history intact. These
++        # deletes are inside the class savepoint and roll back at tearDownClass.
++        pool_keys = [('GD', '50'), ('GD', '51'), ('ZJ', '50')]
++        Pool = cls.env['sourcing.supplier.sequence']
++        Member = cls.env['sourcing.supplier.pool.member']
++        for prov, seg in pool_keys:
++            domain = [('province_code', '=', prov), ('gpc_segment', '=', seg)]
++            Member.search(domain).unlink()
++            Pool.search(domain).unlink()
++
++        Segment = cls.env['gpc.segment']
++        cls.seg_50 = Segment.create({'code': '50', 'name': 'Test Seg 50'})
++        cls.seg_51 = Segment.create({'code': '51', 'name': 'Test Seg 51'})
++
++        Partner = cls.env['res.partner']
++        cls.supplier_xyz = Partner.create({
++            'name': 'XYZ Manufacturing',
++            'is_company': True,
++            'province_code': 'GD',
++            'supplier_rank': 1,
++        })
++        cls.supplier_pqr = Partner.create({
++            'name': 'PQR Industrial',
++            'is_company': True,
++            'province_code': 'GD',
++            'supplier_rank': 1,
++        })
++        cls.supplier_abc = Partner.create({
++            'name': 'ABC Trading',
++            'is_company': True,
++            'province_code': 'ZJ',
++            'supplier_rank': 1,
++        })
++
++        # Product fixture used by tests that need to call button_confirm()
++        # (super().button_confirm() requires at least one valid order line).
++        cls.product = cls.env['product.product'].create({
++            'name': 'Test Widget',
++            'type': 'consu',
++            'purchase_ok': True,
++            'standard_price': 10.0,
++        })
++
++    def _make_rfq(self, supplier, segment=None, opportunity=None):
++        vals = {'partner_id': supplier.id}
++        if segment is not None:
++            vals['gpc_segment_id'] = segment.id
++        if opportunity is not None:
++            vals['opportunity_id'] = opportunity.id
++        return self.env['purchase.order'].create(vals)
++
++    def _make_confirmable_rfq(self, supplier, segment=None, opportunity=None):
++        """Create an RFQ that has the minimum order-line state needed for
++        super().button_confirm() to succeed, so we can exercise the full
++        confirmation flow (state transition + prefix flip) end-to-end."""
++        vals = {
++            'partner_id': supplier.id,
++            'order_line': [(0, 0, {
++                'product_id': self.product.id,
++                'name': self.product.name,
++                'product_qty': 1.0,
++                'price_unit': 10.0,
++            })],
++        }
++        if segment is not None:
++            vals['gpc_segment_id'] = segment.id
++        if opportunity is not None:
++            vals['opportunity_id'] = opportunity.id
++        return self.env['purchase.order'].create(vals)
++
++    # ------------------------------------------------------------------
++    # Letter allocation within a single pool
++    # ------------------------------------------------------------------
++
++    def test_first_supplier_in_pool_gets_letter_a_count_001(self):
++        po = self._make_rfq(self.supplier_xyz, self.seg_50)
++        self.assertEqual(po.sourcing_reference, 'RQ-GD-50-A-001')
++
++    def test_second_supplier_same_pool_gets_letter_b(self):
++        po1 = self._make_rfq(self.supplier_xyz, self.seg_50)
++        po2 = self._make_rfq(self.supplier_pqr, self.seg_50)
++        self.assertEqual(po1.sourcing_reference, 'RQ-GD-50-A-001')
++        self.assertEqual(po2.sourcing_reference, 'RQ-GD-50-B-001')
++
++    def test_same_supplier_reissued_reuses_letter_increments_count(self):
++        po1 = self._make_rfq(self.supplier_xyz, self.seg_50)
++        po2 = self._make_rfq(self.supplier_xyz, self.seg_50)
++        po3 = self._make_rfq(self.supplier_xyz, self.seg_50)
++        self.assertEqual(po1.sourcing_reference, 'RQ-GD-50-A-001')
++        self.assertEqual(po2.sourcing_reference, 'RQ-GD-50-A-002')
++        self.assertEqual(po3.sourcing_reference, 'RQ-GD-50-A-003')
++
++    def test_letter_stable_when_interleaved_with_other_supplier(self):
++        # XYZ takes A, PQR takes B, then XYZ's second RFQ still gets A-002
++        # (not jumping to C). Confirms letters are bound to supplier, not
++        # to RFQ order.
++        po_xyz1 = self._make_rfq(self.supplier_xyz, self.seg_50)
++        po_pqr1 = self._make_rfq(self.supplier_pqr, self.seg_50)
++        po_xyz2 = self._make_rfq(self.supplier_xyz, self.seg_50)
++        po_pqr2 = self._make_rfq(self.supplier_pqr, self.seg_50)
++        self.assertEqual(po_xyz1.sourcing_reference, 'RQ-GD-50-A-001')
++        self.assertEqual(po_pqr1.sourcing_reference, 'RQ-GD-50-B-001')
++        self.assertEqual(po_xyz2.sourcing_reference, 'RQ-GD-50-A-002')
++        self.assertEqual(po_pqr2.sourcing_reference, 'RQ-GD-50-B-002')
++
++    # ------------------------------------------------------------------
++    # Pool isolation
++    # ------------------------------------------------------------------
++
++    def test_different_province_independent_pool(self):
++        po_gd = self._make_rfq(self.supplier_xyz, self.seg_50)
++        po_zj = self._make_rfq(self.supplier_abc, self.seg_50)
++        self.assertEqual(po_gd.sourcing_reference, 'RQ-GD-50-A-001')
++        self.assertEqual(po_zj.sourcing_reference, 'RQ-ZJ-50-A-001')
++
++    def test_different_segment_independent_pool(self):
++        po_50 = self._make_rfq(self.supplier_xyz, self.seg_50)
++        po_51 = self._make_rfq(self.supplier_xyz, self.seg_51)
++        # Same supplier, different segment → letter is allocated per pool,
++        # so XYZ is "A" in both pools (they're independent number-spaces).
++        self.assertEqual(po_50.sourcing_reference, 'RQ-GD-50-A-001')
++        self.assertEqual(po_51.sourcing_reference, 'RQ-GD-51-A-001')
++
++    # ------------------------------------------------------------------
++    # Validation guards
++    # ------------------------------------------------------------------
++
++    def test_missing_province_blocks_id_generation(self):
++        supplier_no_prov = self.env['res.partner'].create({
++            'name': 'No-Province Supplier',
++            'is_company': True,
++            'supplier_rank': 1,
++        })
++        po = self.env['purchase.order'].create({
++            'partner_id': supplier_no_prov.id,
++            'gpc_segment_id': self.seg_50.id,
++        })
++        # create() swallows the UserError so the draft PO still exists,
++        # but no reference was generated.
++        self.assertFalse(po.sourcing_reference)
++        with self.assertRaises(UserError):
++            po._generate_supplier_reference()
++
++    def test_missing_segment_blocks_id_generation(self):
++        po = self.env['purchase.order'].create({
++            'partner_id': self.supplier_xyz.id,
++        })
++        self.assertFalse(po.sourcing_reference)
++        with self.assertRaises(UserError):
++            po._generate_supplier_reference()
++
++    # ------------------------------------------------------------------
++    # Opportunity inheritance
++    # ------------------------------------------------------------------
++
++    def test_segment_inherited_from_opportunity(self):
++        client = self.env['res.partner'].create({'name': 'Client AB'})
++        opp = self.env['crm.lead'].create({
++            'name': 'Test Opp',
++            'type': 'opportunity',
++            'partner_id': client.id,
++            'gpc_segment_id': self.seg_50.id,
++        })
++        # gpc_segment_id deliberately omitted — must be inherited from opp
++        po = self._make_rfq(self.supplier_xyz, opportunity=opp)
++        self.assertEqual(po.gpc_segment_id, self.seg_50)
++        self.assertEqual(po.sourcing_reference, 'RQ-GD-50-A-001')
++
++    def test_opportunity_smart_button_count(self):
++        client = self.env['res.partner'].create({'name': 'Client AB'})
++        opp = self.env['crm.lead'].create({
++            'name': 'Test Opp',
++            'type': 'opportunity',
++            'partner_id': client.id,
++            'gpc_segment_id': self.seg_50.id,
++        })
++        self.assertEqual(opp.purchase_order_count, 0)
++        self._make_rfq(self.supplier_xyz, opportunity=opp)
++        self._make_rfq(self.supplier_pqr, opportunity=opp)
++        opp.invalidate_recordset(['purchase_order_ids', 'purchase_order_count'])
++        self.assertEqual(opp.purchase_order_count, 2)
++
++    # ------------------------------------------------------------------
++    # Confirmation flip RQ → PO (end-to-end via real button_confirm)
++    # ------------------------------------------------------------------
++
++    def test_button_confirm_flips_rq_to_po_end_to_end(self):
++        po = self._make_confirmable_rfq(self.supplier_xyz, self.seg_50)
++        self.assertEqual(po.state, 'draft')
++        self.assertEqual(po.sourcing_reference, 'RQ-GD-50-A-001')
++
++        po.button_confirm()
++
++        self.assertEqual(po.state, 'purchase',
++                         "button_confirm() must advance state via super()")
++        self.assertEqual(po.sourcing_reference, 'PO-GD-50-A-001',
++                         "Prefix must flip RQ- → PO-, body preserved")
++
++    def test_button_confirm_generates_reference_if_missing(self):
++        # Edge case: RFQ created without segment (so create() skipped ID
++        # generation), segment filled in later, then confirmed. The
++        # confirm path must generate the reference before flipping.
++        po = self.env['purchase.order'].create({
++            'partner_id': self.supplier_xyz.id,
++            'order_line': [(0, 0, {
++                'product_id': self.product.id,
++                'name': self.product.name,
++                'product_qty': 1.0,
++                'price_unit': 10.0,
++            })],
++        })
++        self.assertFalse(po.sourcing_reference,
++                         "No segment at create → no reference yet")
++
++        po.gpc_segment_id = self.seg_50
++        po.button_confirm()
++
++        self.assertEqual(po.state, 'purchase')
++        self.assertEqual(po.sourcing_reference, 'PO-GD-50-A-001',
++                         "Confirmation must generate, then flip in one step")
++
++    # ------------------------------------------------------------------
++    # Pool / member row state
++    # ------------------------------------------------------------------
++
++    def test_pool_and_member_rows_created_correctly(self):
++        self._make_rfq(self.supplier_xyz, self.seg_50)
++        self._make_rfq(self.supplier_pqr, self.seg_50)
++        self._make_rfq(self.supplier_xyz, self.seg_50)
++
++        pool = self.env['sourcing.supplier.sequence'].search([
++            ('province_code', '=', 'GD'),
++            ('gpc_segment', '=', '50'),
++        ])
++        self.assertEqual(len(pool), 1)
++        self.assertEqual(pool.next_letter_index, 2,
++                         "Two distinct suppliers in pool → next index is 2")
++        self.assertEqual(pool.count, 3, "Three RFQs total in pool")
++
++        member_xyz = self.env['sourcing.supplier.pool.member'].search([
++            ('province_code', '=', 'GD'),
++            ('gpc_segment', '=', '50'),
++            ('partner_id', '=', self.supplier_xyz.id),
++        ])
++        self.assertEqual(member_xyz.letter, 'A')
++        self.assertEqual(member_xyz.count, 2)
++
++        member_pqr = self.env['sourcing.supplier.pool.member'].search([
++            ('province_code', '=', 'GD'),
++            ('gpc_segment', '=', '50'),
++            ('partner_id', '=', self.supplier_pqr.id),
++        ])
++        self.assertEqual(member_pqr.letter, 'B')
++        self.assertEqual(member_pqr.count, 1)
++
++
++@tagged('post_install', '-at_install', 'cw_sourcing')
++class TestLetterEncoding(TransactionCase):
++    """Boundary tests for the index → letter mapping."""
++
++    def test_letter_encoding_boundaries(self):
++        Member = self.env['sourcing.supplier.pool.member']
++        cases = [
++            (0,   'A'),
++            (1,   'B'),
++            (25,  'Z'),
++            (26,  'AA'),
++            (27,  'AB'),
++            (51,  'AZ'),
++            (52,  'BA'),
++            (701, 'ZZ'),
++        ]
++        for idx, expected in cases:
++            with self.subTest(idx=idx):
++                self.assertEqual(Member._index_to_letter(idx), expected)
++
++    def test_letter_encoding_rejects_out_of_range(self):
++        Member = self.env['sourcing.supplier.pool.member']
++        with self.assertRaises(ValueError):
++            Member._index_to_letter(-1)
++        with self.assertRaises(ValueError):
++            Member._index_to_letter(702)
+diff --git a/sourcing_reference/views/crm_lead_views.xml b/sourcing_reference/views/crm_lead_views.xml
+index a9137d4..09390e4 100644
+--- a/sourcing_reference/views/crm_lead_views.xml
++++ b/sourcing_reference/views/crm_lead_views.xml
+@@ -7,6 +7,17 @@
+         <field name="inherit_id" ref="crm.crm_lead_view_form"/>
+         <field name="arch" type="xml">
+ 
++            <xpath expr="//div[@name='button_box']" position="inside">
++                <button name="action_view_rfqs"
++                        type="object"
++                        class="oe_stat_button"
++                        icon="fa-truck">
++                    <field name="purchase_order_count"
++                           widget="statinfo"
++                           string="RFQs"/>
++                </button>
++            </xpath>
++
+             <xpath expr="//field[@name='partner_id']" position="before">
+                 <field name="sourcing_reference"
+                        readonly="1"
+diff --git a/sourcing_reference/views/purchase_order_views.xml b/sourcing_reference/views/purchase_order_views.xml
+index 135d6dc..b687831 100644
+--- a/sourcing_reference/views/purchase_order_views.xml
++++ b/sourcing_reference/views/purchase_order_views.xml
+@@ -11,6 +11,9 @@
+                        readonly="1"
+                        invisible="not sourcing_reference"
+                        force_save="1"/>
++                <field name="opportunity_id"
++                       options="{'no_create': True}"
++                       domain="[('type', '=', 'opportunity')]"/>
+                 <field name="gpc_segment_id"
+                        options="{'no_create': True}"/>
+             </xpath>
+diff --git a/sourcing_reference/views/sourcing_sequence_views.xml b/sourcing_reference/views/sourcing_sequence_views.xml
+index 5972461..46f2ab8 100644
+--- a/sourcing_reference/views/sourcing_sequence_views.xml
++++ b/sourcing_reference/views/sourcing_sequence_views.xml
+@@ -49,10 +49,11 @@
+         <field name="name">sourcing.supplier.sequence.tree</field>
+         <field name="model">sourcing.supplier.sequence</field>
+         <field name="arch" type="xml">
+-            <list string="Supplier Sequence Counters" editable="bottom">
++            <list string="Supplier Pool Counters">
+                 <field name="province_code"/>
+                 <field name="gpc_segment"/>
+-                <field name="count"/>
++                <field name="next_letter_index" string="# Suppliers"/>
++                <field name="count" string="Total RFQs"/>
+             </list>
+         </field>
+     </record>
+@@ -66,19 +67,72 @@
+                     <group>
+                         <field name="province_code"/>
+                         <field name="gpc_segment"/>
++                        <field name="next_letter_index"/>
+                         <field name="count"/>
+                     </group>
++                    <notebook>
++                        <page string="Suppliers in this Pool">
++                            <field name="member_ids" readonly="1">
++                                <list>
++                                    <field name="letter"/>
++                                    <field name="partner_id"/>
++                                    <field name="count"/>
++                                </list>
++                            </field>
++                        </page>
++                    </notebook>
+                 </sheet>
+             </form>
+         </field>
+     </record>
+ 
+     <record id="action_sourcing_supplier_sequence" model="ir.actions.act_window">
+-        <field name="name">Supplier Sequence Counters</field>
++        <field name="name">Supplier Pool Counters</field>
+         <field name="res_model">sourcing.supplier.sequence</field>
+         <field name="view_mode">list,form</field>
+     </record>
+ 
++    <!-- =========================================================== -->
++    <!-- sourcing.supplier.pool.member                                -->
++    <!-- =========================================================== -->
++    <record id="view_sourcing_supplier_pool_member_tree" model="ir.ui.view">
++        <field name="name">sourcing.supplier.pool.member.tree</field>
++        <field name="model">sourcing.supplier.pool.member</field>
++        <field name="arch" type="xml">
++            <list string="Supplier Pool Members">
++                <field name="province_code"/>
++                <field name="gpc_segment"/>
++                <field name="letter"/>
++                <field name="partner_id"/>
++                <field name="count"/>
++            </list>
++        </field>
++    </record>
++
++    <record id="view_sourcing_supplier_pool_member_form" model="ir.ui.view">
++        <field name="name">sourcing.supplier.pool.member.form</field>
++        <field name="model">sourcing.supplier.pool.member</field>
++        <field name="arch" type="xml">
++            <form>
++                <sheet>
++                    <group>
++                        <field name="province_code"/>
++                        <field name="gpc_segment"/>
++                        <field name="letter"/>
++                        <field name="partner_id"/>
++                        <field name="count"/>
++                    </group>
++                </sheet>
++            </form>
++        </field>
++    </record>
++
++    <record id="action_sourcing_supplier_pool_member" model="ir.actions.act_window">
++        <field name="name">Supplier Pool Members</field>
++        <field name="res_model">sourcing.supplier.pool.member</field>
++        <field name="view_mode">list,form</field>
++    </record>
++
+     <!-- =========================================================== -->
+     <!-- Menu                                                          -->
+     <!-- =========================================================== -->
+@@ -98,9 +152,15 @@
+               sequence="10"/>
+ 
+     <menuitem id="menu_sourcing_supplier_sequence"
+-              name="Supplier Counters"
++              name="Supplier Pools"
+               parent="menu_sourcing_sequences"
+               action="action_sourcing_supplier_sequence"
+               sequence="20"/>
+ 
++    <menuitem id="menu_sourcing_supplier_pool_member"
++              name="Supplier Pool Members"
++              parent="menu_sourcing_sequences"
++              action="action_sourcing_supplier_pool_member"
++              sequence="30"/>
++
+ </odoo>
+-- 
+2.34.1
+

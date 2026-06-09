@@ -1,0 +1,1562 @@
+From 7bcef664708057ae398e05867cbb58a90550f8df Mon Sep 17 00:00:00 2001
+From: cwintlhk <howardcheng@courtwell.com.hk>
+Date: Mon, 8 Jun 2026 11:45:48 +0200
+Subject: [PATCH 06/14] Add cw_shipment: inbound shipment header/lines (PI,
+ containers, vessel, BL)
+
+---
+ cw_shipment/__init__.py                       |   1 +
+ cw_shipment/__manifest__.py                   |  37 +
+ cw_shipment/data/cw_port_data.xml             | 108 +++
+ .../data/res_partner_category_data.xml        |  21 +
+ cw_shipment/models/__init__.py                |   3 +
+ cw_shipment/models/cw_port.py                 |  25 +
+ cw_shipment/models/cw_shipment.py             | 139 ++++
+ cw_shipment/models/cw_shipment_container.py   |  57 ++
+ cw_shipment/scripts/import_cw_shipments.py    | 771 ++++++++++++++++++
+ cw_shipment/security/ir.model.access.csv      |   7 +
+ cw_shipment/views/cw_port_views.xml           |  60 ++
+ cw_shipment/views/cw_shipment_menus.xml       |  31 +
+ cw_shipment/views/cw_shipment_views.xml       | 186 +++++
+ 13 files changed, 1446 insertions(+)
+ create mode 100644 cw_shipment/__init__.py
+ create mode 100644 cw_shipment/__manifest__.py
+ create mode 100644 cw_shipment/data/cw_port_data.xml
+ create mode 100644 cw_shipment/data/res_partner_category_data.xml
+ create mode 100644 cw_shipment/models/__init__.py
+ create mode 100644 cw_shipment/models/cw_port.py
+ create mode 100644 cw_shipment/models/cw_shipment.py
+ create mode 100644 cw_shipment/models/cw_shipment_container.py
+ create mode 100755 cw_shipment/scripts/import_cw_shipments.py
+ create mode 100644 cw_shipment/security/ir.model.access.csv
+ create mode 100644 cw_shipment/views/cw_port_views.xml
+ create mode 100644 cw_shipment/views/cw_shipment_menus.xml
+ create mode 100644 cw_shipment/views/cw_shipment_views.xml
+
+diff --git a/cw_shipment/__init__.py b/cw_shipment/__init__.py
+new file mode 100644
+index 0000000..0650744
+--- /dev/null
++++ b/cw_shipment/__init__.py
+@@ -0,0 +1 @@
++from . import models
+diff --git a/cw_shipment/__manifest__.py b/cw_shipment/__manifest__.py
+new file mode 100644
+index 0000000..e6f2542
+--- /dev/null
++++ b/cw_shipment/__manifest__.py
+@@ -0,0 +1,37 @@
++{
++    'name': "Courtwell Shipment Tracking",
++    'version': '19.0.1.0.0',
++    'summary': "Track inbound shipments: PI, containers, vessel, ETD/ETA, carrier, BL",
++    'description': """
++Courtwell Shipment Tracking
++===========================
++
++Header/lines model for inbound shipments:
++
++* ``cw.shipment`` — one record per PI No. (customer, supplier, freight, dates,
++  invoice).
++* ``cw.shipment.container`` — one line per physical container (size, CNTR No.,
++  BL No., vessel, ETD/ETA).
++* ``cw.port`` — master list of ports of loading and destination ports.
++
++Partners (client/supplier/forwarder/carrier) are linked to existing
++``res.partner`` records. Forwarders and carriers are tagged with the
++"Service Provider" partner category (auto-seeded if missing).
++""",
++    'category': 'Inventory/Purchase',
++    'license': 'LGPL-3',
++    'depends': [
++        'mail',
++        'contacts',
++    ],
++    'data': [
++        'security/ir.model.access.csv',
++        'data/res_partner_category_data.xml',
++        'data/cw_port_data.xml',
++        'views/cw_port_views.xml',
++        'views/cw_shipment_views.xml',
++        'views/cw_shipment_menus.xml',
++    ],
++    'installable': True,
++    'application': True,
++}
+diff --git a/cw_shipment/data/cw_port_data.xml b/cw_shipment/data/cw_port_data.xml
+new file mode 100644
+index 0000000..0a8668f
+--- /dev/null
++++ b/cw_shipment/data/cw_port_data.xml
+@@ -0,0 +1,108 @@
++<?xml version="1.0" encoding="utf-8"?>
++<odoo noupdate="1">
++
++    <!-- Ports of loading: China -->
++    <record id="port_qingdao" model="cw.port">
++        <field name="name">Qingdao</field>
++        <field name="unlocode">CNTAO</field>
++        <field name="country_id" ref="base.cn"/>
++    </record>
++    <record id="port_ningbo" model="cw.port">
++        <field name="name">Ningbo</field>
++        <field name="unlocode">CNNGB</field>
++        <field name="country_id" ref="base.cn"/>
++    </record>
++    <record id="port_shanghai" model="cw.port">
++        <field name="name">Shanghai</field>
++        <field name="unlocode">CNSHA</field>
++        <field name="country_id" ref="base.cn"/>
++    </record>
++    <record id="port_shenzhen" model="cw.port">
++        <field name="name">Shenzhen</field>
++        <field name="unlocode">CNSZX</field>
++        <field name="country_id" ref="base.cn"/>
++    </record>
++    <record id="port_yantian" model="cw.port">
++        <field name="name">Yantian</field>
++        <field name="unlocode">CNYTN</field>
++        <field name="country_id" ref="base.cn"/>
++    </record>
++    <record id="port_shekou" model="cw.port">
++        <field name="name">Shekou</field>
++        <field name="unlocode">CNSHK</field>
++        <field name="country_id" ref="base.cn"/>
++    </record>
++    <record id="port_nansha" model="cw.port">
++        <field name="name">Nansha</field>
++        <field name="unlocode">CNNSA</field>
++        <field name="country_id" ref="base.cn"/>
++    </record>
++    <record id="port_guangzhou" model="cw.port">
++        <field name="name">Guangzhou</field>
++        <field name="unlocode">CNGZG</field>
++        <field name="country_id" ref="base.cn"/>
++    </record>
++    <record id="port_xingang" model="cw.port">
++        <field name="name">Xingang, Tianjin</field>
++        <field name="unlocode">CNTXG</field>
++        <field name="country_id" ref="base.cn"/>
++    </record>
++    <record id="port_nanjing" model="cw.port">
++        <field name="name">Nanjing</field>
++        <field name="unlocode">CNNJG</field>
++        <field name="country_id" ref="base.cn"/>
++    </record>
++    <record id="port_xiamen" model="cw.port">
++        <field name="name">Xiamen</field>
++        <field name="unlocode">CNXMN</field>
++        <field name="country_id" ref="base.cn"/>
++    </record>
++    <record id="port_hongkong" model="cw.port">
++        <field name="name">Hong Kong</field>
++        <field name="unlocode">HKHKG</field>
++        <field name="country_id" ref="base.hk"/>
++    </record>
++    <record id="port_yiwu" model="cw.port">
++        <field name="name">Ningbo Yiwu</field>
++        <field name="unlocode">CNYWU</field>
++        <field name="country_id" ref="base.cn"/>
++    </record>
++
++    <!-- Destination ports -->
++    <record id="port_kingston_jm" model="cw.port">
++        <field name="name">Kingston, Jamaica</field>
++        <field name="unlocode">JMKIN</field>
++        <field name="country_id" ref="base.jm"/>
++    </record>
++    <record id="port_bridgetown_bb" model="cw.port">
++        <field name="name">Bridgetown, Barbados</field>
++        <field name="unlocode">BBBGI</field>
++        <field name="country_id" ref="base.bb"/>
++    </record>
++    <record id="port_rijeka_hr" model="cw.port">
++        <field name="name">Rijeka, Croatia</field>
++        <field name="unlocode">HRRJK</field>
++        <field name="country_id" ref="base.hr"/>
++    </record>
++    <record id="port_jebel_ali" model="cw.port">
++        <field name="name">Jebel Ali, UAE</field>
++        <field name="unlocode">AEJEA</field>
++        <field name="country_id" ref="base.ae"/>
++    </record>
++    <record id="port_miami_us" model="cw.port">
++        <field name="name">Miami, USA</field>
++        <field name="unlocode">USMIA</field>
++        <field name="country_id" ref="base.us"/>
++    </record>
++    <record id="port_paramaribo_sr" model="cw.port">
++        <field name="name">Paramaribo, Suriname</field>
++        <field name="unlocode">SRPBM</field>
++        <field name="country_id" ref="base.sr"/>
++    </record>
++    <record id="port_abidjan_ci" model="cw.port">
++        <field name="name">Abidjan, Cote d'Ivoire</field>
++        <field name="unlocode">CIABJ</field>
++        <field name="country_id" ref="base.ci"/>
++    </record>
++
++</odoo>
+diff --git a/cw_shipment/data/res_partner_category_data.xml b/cw_shipment/data/res_partner_category_data.xml
+new file mode 100644
+index 0000000..cdd306c
+--- /dev/null
++++ b/cw_shipment/data/res_partner_category_data.xml
+@@ -0,0 +1,21 @@
++<?xml version="1.0" encoding="utf-8"?>
++<odoo noupdate="1">
++
++    <record id="partner_cat_service_provider" model="res.partner.category">
++        <field name="name">Service Provider</field>
++        <field name="color">4</field>
++    </record>
++
++    <record id="partner_cat_forwarder" model="res.partner.category">
++        <field name="name">Forwarder</field>
++        <field name="parent_id" ref="partner_cat_service_provider"/>
++        <field name="color">4</field>
++    </record>
++
++    <record id="partner_cat_carrier" model="res.partner.category">
++        <field name="name">Carrier</field>
++        <field name="parent_id" ref="partner_cat_service_provider"/>
++        <field name="color">5</field>
++    </record>
++
++</odoo>
+diff --git a/cw_shipment/models/__init__.py b/cw_shipment/models/__init__.py
+new file mode 100644
+index 0000000..2c2e717
+--- /dev/null
++++ b/cw_shipment/models/__init__.py
+@@ -0,0 +1,3 @@
++from . import cw_port
++from . import cw_shipment
++from . import cw_shipment_container
+diff --git a/cw_shipment/models/cw_port.py b/cw_shipment/models/cw_port.py
+new file mode 100644
+index 0000000..83b27a3
+--- /dev/null
++++ b/cw_shipment/models/cw_port.py
+@@ -0,0 +1,25 @@
++from odoo import api, fields, models
++
++
++class CwPort(models.Model):
++    _name = 'cw.port'
++    _description = 'Shipping Port'
++    _order = 'country_id, name'
++    _rec_names_search = ['name', 'unlocode']
++
++    name = fields.Char(string='Port Name', required=True, translate=False)
++    unlocode = fields.Char(string='UN/LOCODE', size=5, help='5-letter UN/LOCODE, e.g. CNNGB for Ningbo')
++    country_id = fields.Many2one('res.country', string='Country')
++    active = fields.Boolean(default=True)
++
++    _sql_constraints = [
++        ('name_uniq', 'UNIQUE(name)', 'Port name must be unique.'),
++    ]
++
++    @api.depends('name', 'country_id')
++    def _compute_display_name(self):
++        for port in self:
++            if port.country_id:
++                port.display_name = f"{port.name} ({port.country_id.code})"
++            else:
++                port.display_name = port.name or ''
+diff --git a/cw_shipment/models/cw_shipment.py b/cw_shipment/models/cw_shipment.py
+new file mode 100644
+index 0000000..bec6458
+--- /dev/null
++++ b/cw_shipment/models/cw_shipment.py
+@@ -0,0 +1,139 @@
++from odoo import _, api, fields, models
++from odoo.exceptions import ValidationError
++
++
++SHIPMENT_STATUS = [
++    ('draft', 'Draft'),
++    ('cargo_ready', 'Cargo Ready'),
++    ('booked', 'Booked'),
++    ('shipped', 'Shipped'),
++    ('arrived', 'Arrived'),
++    ('delivered', 'Delivered'),
++    ('cancelled', 'Cancelled'),
++]
++
++INCOTERMS = [
++    ('FOB', 'FOB - Free On Board'),
++    ('CIF', 'CIF - Cost, Insurance, Freight'),
++    ('EXW', 'EXW - Ex Works'),
++    ('FCA', 'FCA - Free Carrier'),
++    ('CFR', 'CFR - Cost and Freight'),
++    ('DAP', 'DAP - Delivered At Place'),
++    ('DDP', 'DDP - Delivered Duty Paid'),
++]
++
++
++class CwShipment(models.Model):
++    _name = 'cw.shipment'
++    _description = 'Courtwell Shipment'
++    _inherit = ['mail.thread', 'mail.activity.mixin']
++    _order = 'earliest_etd desc, pi_no desc'
++    _rec_names_search = ['pi_no', 'bl_numbers', 'cntr_numbers']
++
++    pi_no = fields.Char(
++        string='PI No.', required=True, copy=False, tracking=True,
++        help='Proforma Invoice number. Primary identifier from the shipment log.',
++    )
++    fty_pi = fields.Char(string='Factory PI', tracking=True)
++
++    customer_id = fields.Many2one(
++        'res.partner', string='Customer', tracking=True,
++        domain="[('customer_rank', '>', 0)]",
++        help='Customer for this shipment. Optional — some legacy PIs were logged without a confirmed customer.',
++    )
++    supplier_id = fields.Many2one(
++        'res.partner', string='Supplier', tracking=True,
++        domain="[('supplier_rank', '>', 0)]",
++        help='Supplier for this shipment. Optional — some legacy PIs were logged without a confirmed supplier.',
++    )
++    forwarder_id = fields.Many2one(
++        'res.partner', string='Forwarder', tracking=True,
++        help='Freight forwarder. Tagged with the Service Provider category.',
++    )
++
++    term = fields.Selection(INCOTERMS, string='Incoterm', default='FOB', tracking=True)
++
++    freight_cost = fields.Monetary(string='Freight Cost (Forwarder)', currency_field='currency_id', tracking=True)
++    invoice_amount = fields.Monetary(string='Invoice Amount', currency_field='currency_id', tracking=True)
++    currency_id = fields.Many2one(
++        'res.currency', string='Currency', required=True,
++        default=lambda self: self.env.company.currency_id,
++    )
++
++    invoice_no = fields.Char(string='Invoice No.', tracking=True)
++
++    # Dates
++    cargo_ready_date = fields.Date(string='Cargo Ready Date', tracking=True)
++    inspection_date = fields.Date(string="Rec'd / Inspection Date", tracking=True)
++    doc_to_customer_date = fields.Date(string='Doc. to Customer', tracking=True)
++    telex_released_date = fields.Date(string='Telex Released')
++    sent_doc_date = fields.Date(string='Sent Doc')
++
++    courier = fields.Char(string='Courier')
++
++    # Cargo summary (across all containers)
++    description = fields.Char(string='Description')
++    ctn_pkg = fields.Integer(string='CTN / PKG', help='Total cartons or packages.')
++    gross_weight = fields.Float(string='Gross Weight (kg)', digits=(12, 2))
++    total_cbm = fields.Float(string='Total CBM', digits=(12, 3))
++
++    # Logistics
++    port_of_loading_id = fields.Many2one('cw.port', string='Port of Loading', tracking=True)
++    destination_port_id = fields.Many2one('cw.port', string='Destination Port', tracking=True)
++
++    container_ids = fields.One2many(
++        'cw.shipment.container', 'shipment_id', string='Containers', copy=True,
++    )
++    container_count = fields.Integer(compute='_compute_container_aggregates', store=True)
++    cntr_numbers = fields.Char(compute='_compute_container_aggregates', store=True, string='CNTR Nos.')
++    bl_numbers = fields.Char(compute='_compute_container_aggregates', store=True, string='BL Nos.')
++    earliest_etd = fields.Date(compute='_compute_container_aggregates', store=True, string='ETD')
++    latest_eta = fields.Date(compute='_compute_container_aggregates', store=True, string='ETA')
++
++    status = fields.Selection(SHIPMENT_STATUS, string='Status', default='draft', required=True, tracking=True)
++
++    remarks = fields.Text(string='Remarks')
++    import_raw = fields.Text(
++        string='Import Raw Data',
++        help='Original raw values from the source spreadsheet, kept for traceability after normalization.',
++    )
++
++    _sql_constraints = [
++        ('pi_no_uniq', 'UNIQUE(pi_no)', 'PI No. must be unique.'),
++    ]
++
++    @api.depends(
++        'container_ids', 'container_ids.cntr_number', 'container_ids.bl_number',
++        'container_ids.etd', 'container_ids.eta',
++    )
++    def _compute_container_aggregates(self):
++        for ship in self:
++            containers = ship.container_ids
++            ship.container_count = len(containers)
++            cntrs = [c.cntr_number for c in containers if c.cntr_number]
++            ship.cntr_numbers = ', '.join(cntrs) if cntrs else False
++            bls = sorted({c.bl_number for c in containers if c.bl_number})
++            ship.bl_numbers = ', '.join(bls) if bls else False
++            etds = [c.etd for c in containers if c.etd]
++            etas = [c.eta for c in containers if c.eta]
++            ship.earliest_etd = min(etds) if etds else False
++            ship.latest_eta = max(etas) if etas else False
++
++    @api.constrains('forwarder_id')
++    def _check_forwarder_is_service_provider(self):
++        cat = self.env.ref('cw_shipment.partner_cat_service_provider', raise_if_not_found=False)
++        if not cat:
++            return
++        for ship in self:
++            if ship.forwarder_id and cat not in ship.forwarder_id.category_id:
++                raise ValidationError(_(
++                    "Partner %s is not tagged as Service Provider — cannot be used as a Forwarder.",
++                    ship.forwarder_id.display_name,
++                ))
++
++    @api.ondelete(at_uninstall=False)
++    def _unlink_only_draft_or_cancelled(self):
++        if any(s.status not in ('draft', 'cancelled') for s in self):
++            raise ValidationError(_(
++                "Only draft or cancelled shipments can be deleted. Cancel the shipment first."
++            ))
+diff --git a/cw_shipment/models/cw_shipment_container.py b/cw_shipment/models/cw_shipment_container.py
+new file mode 100644
+index 0000000..f5ed6f7
+--- /dev/null
++++ b/cw_shipment/models/cw_shipment_container.py
+@@ -0,0 +1,57 @@
++from odoo import api, fields, models
++
++
++CONTAINER_SIZE = [
++    ('20', "1 x 20'"),
++    ('20_soc', "1 x 20' SOC"),
++    ('40', "1 x 40'"),
++    ('40hq', "1 x 40'HQ"),
++    ('partial_40hq', "Part of 40'HQ"),
++    ('lcl', 'LCL'),
++    ('lcl_cy', 'LCL / CY'),
++    ('air', 'Air Freight'),
++    ('other', 'Other'),
++]
++
++
++class CwShipmentContainer(models.Model):
++    _name = 'cw.shipment.container'
++    _description = 'Shipment Container Line'
++    _order = 'shipment_id, sequence, id'
++    _rec_names_search = ['cntr_number', 'bl_number']
++
++    shipment_id = fields.Many2one(
++        'cw.shipment', string='Shipment', required=True, ondelete='cascade', index=True,
++    )
++    sequence = fields.Integer(default=10)
++
++    container_size = fields.Selection(CONTAINER_SIZE, string='Container Size', required=True, default='40hq')
++    container_size_raw = fields.Char(string='Container Size (raw)', help='Original size string from the source data.')
++    cntr_number = fields.Char(string='Container No.')
++    bl_number = fields.Char(string='BL No.')
++
++    carrier_id = fields.Many2one(
++        'res.partner', string='Carrier',
++        help='Shipping line. Tagged with the Service Provider category.',
++    )
++    vessel_name = fields.Char(string='Vessel Name')
++
++    # Vessel schedule
++    open_date = fields.Date(string='Open')
++    closing_date = fields.Date(string='Closing')
++    si_cutoff = fields.Date(string='SI Cut-off')
++    vgm_cutoff = fields.Date(string='VGM Cut-off')
++    etd = fields.Date(string='ETD')
++    eta_original = fields.Date(string='ETA (Original)')
++    eta = fields.Date(string='ETA')
++
++    # Per-line passthrough fields (denormalized from header for convenience)
++    customer_id = fields.Many2one(related='shipment_id.customer_id', string='Customer', store=False)
++    supplier_id = fields.Many2one(related='shipment_id.supplier_id', string='Supplier', store=False)
++
++    @api.depends('cntr_number', 'container_size', 'shipment_id.pi_no')
++    def _compute_display_name(self):
++        for line in self:
++            label = dict(CONTAINER_SIZE).get(line.container_size, line.container_size or '')
++            parts = [p for p in (line.shipment_id.pi_no, label, line.cntr_number) if p]
++            line.display_name = ' / '.join(parts)
+diff --git a/cw_shipment/scripts/import_cw_shipments.py b/cw_shipment/scripts/import_cw_shipments.py
+new file mode 100755
+index 0000000..d676dab
+--- /dev/null
++++ b/cw_shipment/scripts/import_cw_shipments.py
+@@ -0,0 +1,771 @@
++#!/usr/bin/env python3
++"""
++Import shipments from CW Shipment Log.xlsx into an Odoo 19 database via XML-RPC.
++
++Usage:
++    python import_cw_shipments.py \
++        --url http://localhost:8069 \
++        --db CW19_Test \
++        --user admin --password ADMIN \
++        --file "CW Shipment Log.xlsx" \
++        [--sheet 工作表1] [--dry-run] [--update] [--limit N]
++
++Behavior:
++    * Reads the XLSX, normalizes values (case, container sizes, port spellings).
++    * Groups rows by PI No. — rows sharing a PI become container lines of one shipment.
++    * Looks up partners (customer, supplier, forwarder, carrier) in the target DB by
++      normalized name; only creates them if missing.
++    * Forwarders and carriers are tagged with the "Service Provider" partner category
++      (and sub-tags "Forwarder" / "Carrier" if the cw_shipment module is installed).
++    * --dry-run prints what would happen, makes no writes.
++    * --update overwrites existing shipments (matched by PI No.); default skips them.
++"""
++
++from __future__ import annotations
++
++import argparse
++import collections
++import datetime as dt
++import logging
++import re
++import sys
++import xmlrpc.client
++from pathlib import Path
++
++try:
++    import openpyxl
++except ImportError:
++    print("ERROR: openpyxl is required. Install with: pip install openpyxl", file=sys.stderr)
++    sys.exit(2)
++
++
++log = logging.getLogger("cw_shipment.import")
++
++
++# ---------------------------------------------------------------------------
++# Header schema (row 3 of the spreadsheet, 1-indexed column numbers)
++# ---------------------------------------------------------------------------
++COL = {
++    'pi_no':              1,   # A
++    'customer':           2,   # B
++    'term':               3,   # C
++    'supplier':           4,   # D
++    'forwarder':          5,   # E
++    'freight_cost':       6,   # F
++    'cargo_ready_date':   7,   # G
++    'inspection_date':    8,   # H
++    'status':             9,   # I
++    'doc_to_customer':   10,   # J
++    'telex_released':    11,   # K
++    'port_of_loading':   12,   # L
++    'description':       13,   # M
++    'ctn_pkg':           14,   # N
++    'gross_weight':      15,   # O
++    'total_cbm':         16,   # P
++    'cntr_size':         17,   # Q
++    'vessel_name':       18,   # R
++    'open_date':         19,   # S
++    'closing_date':      20,   # T
++    'si_cutoff':         21,   # U
++    'vgm_cutoff':        22,   # V
++    'etd':               23,   # W
++    'eta_original':      24,   # X
++    'eta':               25,   # Y
++    'destination':       26,   # Z
++    'carrier':           27,   # AA
++    'cntr_number':       28,   # AB
++    'bl_number':         29,   # AC
++    'invoice_no':        30,   # AD
++    'invoice_amount':    31,   # AE
++    'pi_no_alt':         32,   # AF
++    'fty_pi':            33,   # AG
++    'sent_doc':          34,   # AH
++    'courier':           35,   # AI
++    'remarks':           36,   # AJ
++}
++
++HEADER_ROW = 3
++FIRST_DATA_ROW = 4
++
++
++# ---------------------------------------------------------------------------
++# Normalization
++# ---------------------------------------------------------------------------
++def norm_name(value):
++    """Normalize a partner / port name: trim, collapse whitespace, title-case unless already mixed."""
++    if value is None:
++        return None
++    s = str(value).strip()
++    if not s:
++        return None
++    s = re.sub(r'\s+', ' ', s)
++    # If the string is ALL CAPS or all lowercase, title-case it. Otherwise preserve mixed case.
++    if s.isupper() or s.islower():
++        s = s.title()
++    return s
++
++
++# Manual aliases for known-equivalent names. Add entries here when reviewing
++# the dry-run report flags new duplicates.
++CUSTOMER_ALIASES = {
++    'Bashco': 'Bashco',
++    'BASHCO': 'Bashco',
++    'JADA': 'JADA',
++    'ICC': 'ICC',
++    'BJS': 'BJS',
++    'BJ Inv.': 'BJS',  # likely the same per spreadsheet pattern
++    'Wys/Wyg Ent.': 'WYS/WYG Ent.',
++    'Eventify': 'Eventify',
++    'Mane': 'Mane',
++    'Chickmont': 'Chickmont',
++    'Super Feeds': 'Super Feeds',
++    'Lucky Store': 'Lucky Store',
++    'Ridgelands': 'Ridgelands',
++    'Western Wholesales': 'Western Wholesales',
++    'Margaritaville': 'Margaritaville',
++    'Simplex': 'SIMPLEX',
++    'Prudential Belife': 'Prudential Belife',
++    'Rainforest': 'Rainforest',
++}
++
++PORT_ALIASES = {
++    'Ningbo': 'Ningbo',
++    'NINGBO': 'Ningbo',
++    'Qingdao': 'Qingdao',
++    'QINGDAO': 'Qingdao',
++    'Shanghai': 'Shanghai',
++    'Shenzhen': 'Shenzhen',
++    'Yantian': 'Yantian',
++    'Shekou': 'Shekou',
++    'Nansha GZ': 'Nansha',
++    'NANSHA GZ': 'Nansha',
++    'Guangzhou': 'Guangzhou',
++    'GUANGZHOU': 'Guangzhou',
++    'Xingang, Tianjin': 'Xingang, Tianjin',
++    'Tainjin': 'Xingang, Tianjin',  # typo in source
++    'Nanjing': 'Nanjing',
++    'Nanjin / Shanghai': 'Nanjing',
++    'Xiamen': 'Xiamen',
++    'Hong Kong': 'Hong Kong',
++    'HONG KONG': 'Hong Kong',
++    'Ningbo Yiwu': 'Ningbo Yiwu',
++}
++
++DESTINATION_ALIASES = {
++    'Kingston': 'Kingston, Jamaica',
++    'KINGSTON, JAMAICA': 'Kingston, Jamaica',
++    'Kingston, Jamaica': 'Kingston, Jamaica',
++    'Barbados': 'Bridgetown, Barbados',
++    'BRIDGETOWN, BARBADOS': 'Bridgetown, Barbados',
++    'Bridgetown': 'Bridgetown, Barbados',
++    'BRIDGETOWN': 'Bridgetown, Barbados',
++    'Bridgeown': 'Bridgetown, Barbados',  # typo
++    'Rijeka': 'Rijeka, Croatia',
++    'RIJEKA, CROATIA': 'Rijeka, Croatia',
++    'JEBEL ALI': 'Jebel Ali, UAE',
++    'Suriname': 'Paramaribo, Suriname',
++    'Paramaribo, Suriname': 'Paramaribo, Suriname',
++    'Miami': 'Miami, USA',
++    'DXB': 'Jebel Ali, UAE',
++    'ABJ': 'Abidjan, Cote d\'Ivoire',
++    'NINGBO': 'Ningbo',  # appears once in dest column — likely data entry error, leave as-is port name
++}
++
++STATUS_MAP = {
++    'shipped': 'shipped',
++    'SHIPPED': 'shipped',
++}
++
++# Carrier names are well-known shipping-line acronyms; keep them uppercase
++# (or in the company's own canonical casing) rather than title-casing.
++CARRIER_ALIASES = {
++    'APL': 'APL',
++    'Apl': 'APL',
++    'CMA': 'CMA CGM',
++    'Cma': 'CMA CGM',
++    'CMA CGM': 'CMA CGM',
++    'Cma Cgm': 'CMA CGM',
++    'COSCO': 'COSCO',
++    'Cosco': 'COSCO',
++    'EMC': 'EMC',
++    'Emc': 'EMC',
++    'EUMEX': 'EUMEX',
++    'Eumex': 'EUMEX',
++    'HPL': 'Hapag-Lloyd',
++    'Hpl': 'Hapag-Lloyd',
++    'MAERSK': 'Maersk',
++    'Maersk': 'Maersk',
++    'MSK': 'Maersk',
++    'Msk': 'Maersk',
++    'MSC': 'MSC',
++    'Msc': 'MSC',
++    'ZIM': 'ZIM',
++    'Zim': 'ZIM',
++}
++
++# Map raw container-size strings to (selection_value, count_of_containers)
++CONTAINER_SIZE_MAP = {
++    "1X20'": ('20', 1),
++    "1x20'": ('20', 1),
++    "1X20' SOC": ('20_soc', 1),
++    "1X40'": ('40', 1),
++    "1x40'": ('40', 1),
++    "1X40'HQ": ('40hq', 1),
++    "1x40'HQ": ('40hq', 1),
++    "1X40HQ": ('40hq', 1),
++    "1x40HQ": ('40hq', 1),
++    "1x40HQ'": ('40hq', 1),
++    "2X40'HQ": ('40hq', 2),
++    "2x40'HQ": ('40hq', 2),
++    "3X40'HQ": ('40hq', 3),
++    "4X40'HQ": ('40hq', 4),
++    "4x40'HQ": ('40hq', 4),
++    "PART OF 40'HQ": ('partial_40hq', 1),
++    "LCL": ('lcl', 1),
++    "LCL/CY": ('lcl_cy', 1),
++    "AIR": ('air', 1),
++}
++
++
++def parse_container_size(raw):
++    """Return (selection_value, n_containers, raw_kept)."""
++    if not raw:
++        return ('40hq', 1, None)
++    key = re.sub(r'\s+', '', str(raw).strip()).upper()
++    # Re-add apostrophes? Easier: index by uppercased+stripped, with table normalized the same way.
++    for k, v in CONTAINER_SIZE_MAP.items():
++        if re.sub(r'\s+', '', k).upper() == key:
++            return (v[0], v[1], str(raw).strip())
++    log.warning("Unmapped container size: %r — falling back to 'other'", raw)
++    return ('other', 1, str(raw).strip())
++
++
++def to_date(value):
++    """Convert openpyxl cell value to ISO date string (or None)."""
++    if value is None or value == '':
++        return None
++    if isinstance(value, dt.datetime):
++        return value.date().isoformat()
++    if isinstance(value, dt.date):
++        return value.isoformat()
++    # Sometimes Excel stores dates as strings.
++    s = str(value).strip()
++    for fmt in ('%Y-%m-%d', '%d/%m/%Y', '%m/%d/%Y', '%d-%b-%y', '%d-%b-%Y'):
++        try:
++            return dt.datetime.strptime(s, fmt).date().isoformat()
++        except ValueError:
++            continue
++    log.debug("Could not parse date: %r", value)
++    return None
++
++
++def to_float(value):
++    if value is None or value == '':
++        return 0.0
++    if isinstance(value, (int, float)):
++        return float(value)
++    # Keep digits, decimal point, leading minus only. Drop trailing punctuation like ".-".
++    s = str(value).strip()
++    m = re.match(r'-?\d+(?:\.\d+)?', s.replace(',', ''))
++    return float(m.group(0)) if m else 0.0
++
++
++def to_int(value):
++    if value is None or value == '':
++        return 0
++    if isinstance(value, int):
++        return value
++    if isinstance(value, float):
++        return int(value)
++    m = re.match(r'-?\d+', str(value).strip().replace(',', ''))
++    return int(m.group(0)) if m else 0
++
++
++def to_str(value):
++    if value is None:
++        return None
++    s = str(value).strip()
++    return s or None
++
++
++# ---------------------------------------------------------------------------
++# Parse XLSX into row dicts
++# ---------------------------------------------------------------------------
++def parse_xlsx(path, sheet_name=None):
++    wb = openpyxl.load_workbook(path, data_only=True, read_only=True)
++    ws = wb[sheet_name] if sheet_name else wb[wb.sheetnames[0]]
++
++    rows = []
++    for row_idx in range(FIRST_DATA_ROW, ws.max_row + 1):
++        pi = ws.cell(row=row_idx, column=COL['pi_no']).value
++        if pi is None or str(pi).strip() == '':
++            continue
++
++        row = {key: ws.cell(row=row_idx, column=col).value for key, col in COL.items()}
++        row['_row_number'] = row_idx
++        rows.append(row)
++
++    return rows
++
++
++# ---------------------------------------------------------------------------
++# Group rows by PI into (header_dict, [container_dicts]) tuples
++# ---------------------------------------------------------------------------
++def build_shipments(rows):
++    """Group rows by PI No. into shipments with container lines."""
++    by_pi = collections.OrderedDict()
++
++    for row in rows:
++        pi = to_str(row['pi_no'])
++        if not pi:
++            continue
++
++        bucket = by_pi.setdefault(pi, {'header': None, 'lines': []})
++
++        # Header is taken from the first occurrence; subsequent rows only contribute container lines.
++        if bucket['header'] is None:
++            bucket['header'] = build_header(row, pi)
++
++        for line in build_lines(row):
++            bucket['lines'].append(line)
++
++    return by_pi
++
++
++def build_header(row, pi):
++    customer_raw = to_str(row['customer'])
++    supplier_raw = to_str(row['supplier'])
++    forwarder_raw = to_str(row['forwarder'])
++    port_raw = to_str(row['port_of_loading'])
++    dest_raw = to_str(row['destination'])
++    status_raw = to_str(row['status'])
++
++    return {
++        'pi_no': pi,
++        'fty_pi': to_str(row['fty_pi']),
++        'customer_name': resolve_alias(CUSTOMER_ALIASES, customer_raw),
++        'supplier_name': norm_name(supplier_raw),
++        'forwarder_name': norm_name(forwarder_raw),
++        'term': (to_str(row['term']) or 'FOB').upper(),
++        'freight_cost': to_float(row['freight_cost']),
++        'invoice_amount': to_float(row['invoice_amount']),
++        'invoice_no': to_str(row['invoice_no']),
++        'cargo_ready_date': to_date(row['cargo_ready_date']),
++        'inspection_date': to_date(row['inspection_date']),
++        'doc_to_customer_date': to_date(row['doc_to_customer']),
++        'telex_released_date': to_date(row['telex_released']),
++        'sent_doc_date': to_date(row['sent_doc']),
++        'courier': to_str(row['courier']),
++        'description': to_str(row['description']),
++        'ctn_pkg': to_int(row['ctn_pkg']),
++        'gross_weight': to_float(row['gross_weight']),
++        'total_cbm': to_float(row['total_cbm']),
++        'port_of_loading_name': resolve_alias(PORT_ALIASES, port_raw),
++        'destination_port_name': resolve_alias(DESTINATION_ALIASES, dest_raw),
++        'status': STATUS_MAP.get(status_raw, 'draft') if status_raw else 'draft',
++        'remarks': to_str(row['remarks']),
++        '_raw': {  # preserved for import_raw field
++            'row_number': row['_row_number'],
++            'customer': customer_raw,
++            'supplier': supplier_raw,
++            'forwarder': forwarder_raw,
++            'port': port_raw,
++            'destination': dest_raw,
++            'status': status_raw,
++            'term': to_str(row['term']),
++            'cntr_size': to_str(row['cntr_size']),
++        },
++    }
++
++
++def build_lines(row):
++    """Build container lines from a single spreadsheet row.
++
++    If size says "2x40HQ", we create 2 lines (CNTR No. only attaches to the first
++    unless comma-separated). Comma-separated CNTR No.s are split into multiple lines.
++    """
++    size_raw = to_str(row['cntr_size'])
++    size_value, n_containers, size_kept = parse_container_size(size_raw)
++
++    cntr_raw = to_str(row['cntr_number'])
++    cntr_numbers = []
++    if cntr_raw:
++        cntr_numbers = [c.strip() for c in re.split(r'[,;/]', cntr_raw) if c.strip()]
++
++    # If multiple CNTR Nos. provided, use that count; otherwise rely on parsed n.
++    actual_n = max(n_containers, len(cntr_numbers)) if cntr_numbers else n_containers
++
++    lines = []
++    for i in range(actual_n):
++        cntr_number = cntr_numbers[i] if i < len(cntr_numbers) else None
++        carrier_raw = to_str(row['carrier'])
++        lines.append({
++            'container_size': size_value,
++            'container_size_raw': size_kept,
++            'cntr_number': cntr_number,
++            'bl_number': to_str(row['bl_number']),
++            'carrier_name': resolve_alias(CARRIER_ALIASES, carrier_raw),
++            'vessel_name': to_str(row['vessel_name']),
++            'open_date': to_date(row['open_date']),
++            'closing_date': to_date(row['closing_date']),
++            'si_cutoff': to_date(row['si_cutoff']),
++            'vgm_cutoff': to_date(row['vgm_cutoff']),
++            'etd': to_date(row['etd']),
++            'eta_original': to_date(row['eta_original']),
++            'eta': to_date(row['eta']),
++            'sequence': 10 + (i * 10),
++        })
++    return lines
++
++
++def resolve_alias(alias_map, value):
++    if value is None:
++        return None
++    if value in alias_map:
++        return alias_map[value]
++    normed = norm_name(value)
++    if normed in alias_map:
++        return alias_map[normed]
++    return normed
++
++
++# ---------------------------------------------------------------------------
++# Odoo XML-RPC client
++# ---------------------------------------------------------------------------
++class OdooClient:
++    def __init__(self, url, db, user, password, dry_run=False):
++        self.url = url.rstrip('/')
++        self.db = db
++        self.user = user
++        self.password = password
++        self.dry_run = dry_run
++        self.uid = None
++        self._models = None
++        self._partner_by_name = {}
++        self._port_by_name = {}
++        self._cat_by_name = {}
++        self._existing_pi = set()
++
++    def connect(self):
++        common = xmlrpc.client.ServerProxy(f"{self.url}/xmlrpc/2/common", allow_none=True)
++        version = common.version()
++        log.info("Connected to %s — Odoo %s", self.url, version.get('server_version'))
++        self.uid = common.authenticate(self.db, self.user, self.password, {})
++        if not self.uid:
++            raise RuntimeError(f"Authentication failed for {self.user}@{self.db}")
++        log.info("Authenticated as uid=%s on db=%s", self.uid, self.db)
++        self._models = xmlrpc.client.ServerProxy(f"{self.url}/xmlrpc/2/object", allow_none=True)
++
++    def execute(self, model, method, args, kwargs=None):
++        return self._models.execute_kw(self.db, self.uid, self.password, model, method, args, kwargs or {})
++
++    # ----- pre-loading caches ----------------------------------------------
++    def preload(self):
++        log.info("Preloading partner names…")
++        partners = self.execute('res.partner', 'search_read',
++                                [[]],
++                                {'fields': ['id', 'name', 'customer_rank', 'supplier_rank', 'category_id']})
++        for p in partners:
++            key = (p['name'] or '').strip().lower()
++            if key:
++                self._partner_by_name.setdefault(key, []).append(p)
++        log.info("  %d partners loaded", len(partners))
++
++        log.info("Preloading ports…")
++        try:
++            ports = self.execute('cw.port', 'search_read', [[]], {'fields': ['id', 'name']})
++            for p in ports:
++                self._port_by_name[p['name'].strip().lower()] = p['id']
++            log.info("  %d ports loaded", len(ports))
++        except xmlrpc.client.Fault as exc:
++            log.warning("cw.port model not available — module may not be installed: %s", exc.faultString)
++
++        log.info("Preloading partner categories…")
++        cats = self.execute('res.partner.category', 'search_read',
++                            [[]], {'fields': ['id', 'name']})
++        for c in cats:
++            self._cat_by_name[c['name'].strip().lower()] = c['id']
++
++        log.info("Preloading existing shipments…")
++        try:
++            existing = self.execute('cw.shipment', 'search_read', [[]], {'fields': ['pi_no']})
++            self._existing_pi = {s['pi_no'] for s in existing}
++            log.info("  %d shipments already in DB", len(self._existing_pi))
++        except xmlrpc.client.Fault as exc:
++            log.warning("cw.shipment model not available — module may not be installed: %s", exc.faultString)
++
++    # ----- partner lookup / create -----------------------------------------
++    def get_or_create_partner(self, name, role):
++        """role: 'customer' | 'supplier' | 'forwarder' | 'carrier'"""
++        if not name:
++            return None
++
++        key = name.strip().lower()
++        matches = self._partner_by_name.get(key, [])
++
++        if matches:
++            return matches[0]['id']
++
++        # Build vals according to role
++        vals = {'name': name, 'is_company': True}
++        category_ids = []
++
++        if role == 'customer':
++            vals['customer_rank'] = 1
++        elif role == 'supplier':
++            vals['supplier_rank'] = 1
++        elif role == 'forwarder':
++            cat_sp = self._cat_by_name.get('service provider')
++            cat_fw = self._cat_by_name.get('forwarder')
++            if cat_sp:
++                category_ids.append(cat_sp)
++            if cat_fw:
++                category_ids.append(cat_fw)
++        elif role == 'carrier':
++            cat_sp = self._cat_by_name.get('service provider')
++            cat_c = self._cat_by_name.get('carrier')
++            if cat_sp:
++                category_ids.append(cat_sp)
++            if cat_c:
++                category_ids.append(cat_c)
++        if category_ids:
++            vals['category_id'] = [(6, 0, category_ids)]
++
++        if self.dry_run:
++            log.info("    [DRY] would create partner %r (role=%s)", name, role)
++            return None
++
++        new_id = self.execute('res.partner', 'create', [vals])
++        log.info("    created partner %r (role=%s) id=%s", name, role, new_id)
++        # Update cache
++        self._partner_by_name.setdefault(key, []).append({
++            'id': new_id, 'name': name,
++            'customer_rank': vals.get('customer_rank', 0),
++            'supplier_rank': vals.get('supplier_rank', 0),
++            'category_id': category_ids,
++        })
++        return new_id
++
++    def get_or_create_port(self, name):
++        if not name:
++            return None
++        key = name.strip().lower()
++        if key in self._port_by_name:
++            return self._port_by_name[key]
++        if self.dry_run:
++            log.info("    [DRY] would create port %r", name)
++            return None
++        new_id = self.execute('cw.port', 'create', [{'name': name}])
++        log.info("    created port %r id=%s", name, new_id)
++        self._port_by_name[key] = new_id
++        return new_id
++
++    # ----- shipment write --------------------------------------------------
++    def upsert_shipment(self, header, lines, partner_ids, port_ids, update_existing=False):
++        pi = header['pi_no']
++
++        line_vals_list = []
++        for line in lines:
++            carrier_id = partner_ids.get(('carrier', line['carrier_name'])) if line['carrier_name'] else False
++            line_vals_list.append((0, 0, {
++                'container_size': line['container_size'],
++                'container_size_raw': line['container_size_raw'],
++                'cntr_number': line['cntr_number'],
++                'bl_number': line['bl_number'],
++                'carrier_id': carrier_id,
++                'vessel_name': line['vessel_name'],
++                'open_date': line['open_date'],
++                'closing_date': line['closing_date'],
++                'si_cutoff': line['si_cutoff'],
++                'vgm_cutoff': line['vgm_cutoff'],
++                'etd': line['etd'],
++                'eta_original': line['eta_original'],
++                'eta': line['eta'],
++                'sequence': line['sequence'],
++            }))
++
++        vals = {
++            'pi_no': pi,
++            'fty_pi': header['fty_pi'],
++            'customer_id': partner_ids.get(('customer', header['customer_name'])) or False,
++            'supplier_id': partner_ids.get(('supplier', header['supplier_name'])) or False,
++            'forwarder_id': partner_ids.get(('forwarder', header['forwarder_name'])) or False,
++            'term': header['term'] if header['term'] in ('FOB', 'CIF', 'EXW', 'FCA', 'CFR', 'DAP', 'DDP') else 'FOB',
++            'freight_cost': header['freight_cost'],
++            'invoice_amount': header['invoice_amount'],
++            'invoice_no': header['invoice_no'],
++            'cargo_ready_date': header['cargo_ready_date'],
++            'inspection_date': header['inspection_date'],
++            'doc_to_customer_date': header['doc_to_customer_date'],
++            'telex_released_date': header['telex_released_date'],
++            'sent_doc_date': header['sent_doc_date'],
++            'courier': header['courier'],
++            'description': header['description'],
++            'ctn_pkg': header['ctn_pkg'],
++            'gross_weight': header['gross_weight'],
++            'total_cbm': header['total_cbm'],
++            'port_of_loading_id': port_ids.get(header['port_of_loading_name']) or False,
++            'destination_port_id': port_ids.get(header['destination_port_name']) or False,
++            'status': header['status'],
++            'remarks': header['remarks'],
++            'import_raw': repr(header['_raw']),
++            'container_ids': line_vals_list,
++        }
++
++        if pi in self._existing_pi:
++            if not update_existing:
++                log.info("  SKIP existing shipment PI=%s", pi)
++                return None
++            # Update path: find id, write header, replace lines
++            existing = self.execute('cw.shipment', 'search', [[['pi_no', '=', pi]]])
++            if existing:
++                ship_id = existing[0]
++                if self.dry_run:
++                    log.info("  [DRY] would UPDATE shipment PI=%s id=%s (%d lines)", pi, ship_id, len(line_vals_list))
++                    return ship_id
++                # Clear existing lines first
++                line_ids = self.execute('cw.shipment.container', 'search', [[['shipment_id', '=', ship_id]]])
++                if line_ids:
++                    self.execute('cw.shipment.container', 'unlink', [line_ids])
++                self.execute('cw.shipment', 'write', [[ship_id], vals])
++                log.info("  UPDATED shipment PI=%s id=%s (%d containers)", pi, ship_id, len(line_vals_list))
++                return ship_id
++
++        # Create path
++        if self.dry_run:
++            log.info("  [DRY] would CREATE shipment PI=%s (%d containers)", pi, len(line_vals_list))
++            return None
++        new_id = self.execute('cw.shipment', 'create', [vals])
++        log.info("  CREATED shipment PI=%s id=%s (%d containers)", pi, new_id, len(line_vals_list))
++        self._existing_pi.add(pi)
++        return new_id
++
++
++# ---------------------------------------------------------------------------
++# Main flow
++# ---------------------------------------------------------------------------
++def collect_partners_and_ports(shipments):
++    """Return (set of (role, name), set of port_names)."""
++    partners = set()
++    ports = set()
++    for pi, bucket in shipments.items():
++        h = bucket['header']
++        if h['customer_name']:
++            partners.add(('customer', h['customer_name']))
++        if h['supplier_name']:
++            partners.add(('supplier', h['supplier_name']))
++        if h['forwarder_name']:
++            partners.add(('forwarder', h['forwarder_name']))
++        if h['port_of_loading_name']:
++            ports.add(h['port_of_loading_name'])
++        if h['destination_port_name']:
++            ports.add(h['destination_port_name'])
++        for line in bucket['lines']:
++            if line['carrier_name']:
++                partners.add(('carrier', line['carrier_name']))
++    return partners, ports
++
++
++def run(args):
++    logging.basicConfig(
++        level=logging.DEBUG if args.verbose else logging.INFO,
++        format='%(asctime)s %(levelname)-7s %(message)s',
++        datefmt='%H:%M:%S',
++    )
++
++    path = Path(args.file).expanduser().resolve()
++    if not path.exists():
++        log.error("File not found: %s", path)
++        return 2
++
++    log.info("=== STAGE 1: parse XLSX ===")
++    rows = parse_xlsx(path, args.sheet)
++    log.info("  %d non-empty data rows", len(rows))
++
++    shipments = build_shipments(rows)
++    if args.limit:
++        shipments = collections.OrderedDict(list(shipments.items())[:args.limit])
++    log.info("  %d distinct shipments (by PI No.)", len(shipments))
++
++    partner_keys, port_names = collect_partners_and_ports(shipments)
++    log.info("  %d distinct partners to resolve", len(partner_keys))
++    log.info("  %d distinct ports to resolve", len(port_names))
++
++    if args.parse_only:
++        log.info("=== --parse-only — done ===")
++        return 0
++
++    log.info("=== STAGE 2: connect to Odoo ===")
++    client = OdooClient(args.url, args.db, args.user, args.password, dry_run=args.dry_run)
++    client.connect()
++    client.preload()
++
++    log.info("=== STAGE 3: resolve partners ===")
++    partner_ids = {}
++    new_partners = 0
++    for role, name in sorted(partner_keys):
++        pid = client.get_or_create_partner(name, role)
++        if pid:
++            partner_ids[(role, name)] = pid
++        elif client.dry_run:
++            partner_ids[(role, name)] = None
++            new_partners += 1
++
++    log.info("=== STAGE 4: resolve ports ===")
++    port_ids = {}
++    for name in sorted(port_names):
++        port_ids[name] = client.get_or_create_port(name)
++
++    log.info("=== STAGE 5: create shipments ===")
++    created, updated, skipped = 0, 0, 0
++    for pi, bucket in shipments.items():
++        header = bucket['header']
++
++        # Note shipments with missing customer or supplier — import them anyway
++        # since the source data has some legacy PIs without these.
++        gaps = []
++        if not header['customer_name']:
++            gaps.append('customer')
++        if not header['supplier_name']:
++            gaps.append('supplier')
++        if gaps:
++            log.warning("  PI=%s — importing with missing %s (fill in via Odoo later)", pi, ', '.join(gaps))
++
++        try:
++            result = client.upsert_shipment(header, bucket['lines'], partner_ids, port_ids, update_existing=args.update)
++            if result is None and pi in client._existing_pi and not args.update:
++                skipped += 1
++            elif pi in client._existing_pi and args.update:
++                updated += 1
++            else:
++                created += 1
++        except xmlrpc.client.Fault as exc:
++            log.error("  PI=%s FAILED: %s", pi, exc.faultString)
++            skipped += 1
++
++    log.info("=== SUMMARY ===")
++    log.info("  Shipments:  %d created, %d updated, %d skipped", created, updated, skipped)
++    if args.dry_run:
++        log.info("  (dry-run — nothing was written to %s)", args.db)
++    return 0
++
++
++def main():
++    p = argparse.ArgumentParser(description="Import CW Shipment Log into Odoo 19")
++    p.add_argument('--url', default='http://localhost:8069', help='Odoo URL')
++    p.add_argument('--db', required=True, help='Database name (e.g. CW19_Test)')
++    p.add_argument('--user', default='admin', help='Login (default: admin)')
++    p.add_argument('--password', required=True, help='Password or API key')
++    p.add_argument('--file', required=True, help='Path to CW Shipment Log.xlsx')
++    p.add_argument('--sheet', default=None, help='Sheet name (default: first sheet)')
++    p.add_argument('--dry-run', action='store_true', help='No writes; report what would happen')
++    p.add_argument('--update', action='store_true', help='Update existing shipments matched by PI No.')
++    p.add_argument('--limit', type=int, default=0, help='Import at most N shipments (for testing)')
++    p.add_argument('--parse-only', action='store_true', help='Just parse the file, do not connect to Odoo')
++    p.add_argument('-v', '--verbose', action='store_true')
++    args = p.parse_args()
++    return run(args)
++
++
++if __name__ == '__main__':
++    sys.exit(main())
+diff --git a/cw_shipment/security/ir.model.access.csv b/cw_shipment/security/ir.model.access.csv
+new file mode 100644
+index 0000000..19743d7
+--- /dev/null
++++ b/cw_shipment/security/ir.model.access.csv
+@@ -0,0 +1,7 @@
++id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
++access_cw_port_user,cw.port user,model_cw_port,base.group_user,1,0,0,0
++access_cw_port_manager,cw.port manager,model_cw_port,base.group_system,1,1,1,1
++access_cw_shipment_user,cw.shipment user,model_cw_shipment,base.group_user,1,1,1,0
++access_cw_shipment_manager,cw.shipment manager,model_cw_shipment,base.group_system,1,1,1,1
++access_cw_shipment_container_user,cw.shipment.container user,model_cw_shipment_container,base.group_user,1,1,1,1
++access_cw_shipment_container_manager,cw.shipment.container manager,model_cw_shipment_container,base.group_system,1,1,1,1
+diff --git a/cw_shipment/views/cw_port_views.xml b/cw_shipment/views/cw_port_views.xml
+new file mode 100644
+index 0000000..b94fdf2
+--- /dev/null
++++ b/cw_shipment/views/cw_port_views.xml
+@@ -0,0 +1,60 @@
++<?xml version="1.0" encoding="utf-8"?>
++<odoo>
++
++    <record id="view_cw_port_list" model="ir.ui.view">
++        <field name="name">cw.port.list</field>
++        <field name="model">cw.port</field>
++        <field name="arch" type="xml">
++            <list string="Ports" editable="bottom">
++                <field name="name"/>
++                <field name="unlocode"/>
++                <field name="country_id"/>
++                <field name="active" widget="boolean_toggle"/>
++            </list>
++        </field>
++    </record>
++
++    <record id="view_cw_port_form" model="ir.ui.view">
++        <field name="name">cw.port.form</field>
++        <field name="model">cw.port</field>
++        <field name="arch" type="xml">
++            <form string="Port">
++                <sheet>
++                    <group>
++                        <group>
++                            <field name="name"/>
++                            <field name="unlocode"/>
++                        </group>
++                        <group>
++                            <field name="country_id"/>
++                            <field name="active"/>
++                        </group>
++                    </group>
++                </sheet>
++            </form>
++        </field>
++    </record>
++
++    <record id="view_cw_port_search" model="ir.ui.view">
++        <field name="name">cw.port.search</field>
++        <field name="model">cw.port</field>
++        <field name="arch" type="xml">
++            <search string="Ports">
++                <field name="name"/>
++                <field name="unlocode"/>
++                <field name="country_id"/>
++                <filter string="Archived" name="archived" domain="[('active','=',False)]"/>
++                <separator/>
++                <filter string="Country" name="group_country" context="{'group_by':'country_id'}"/>
++            </search>
++        </field>
++    </record>
++
++    <record id="action_cw_port" model="ir.actions.act_window">
++        <field name="name">Ports</field>
++        <field name="res_model">cw.port</field>
++        <field name="view_mode">list,form</field>
++        <field name="search_view_id" ref="view_cw_port_search"/>
++    </record>
++
++</odoo>
+diff --git a/cw_shipment/views/cw_shipment_menus.xml b/cw_shipment/views/cw_shipment_menus.xml
+new file mode 100644
+index 0000000..888bd01
+--- /dev/null
++++ b/cw_shipment/views/cw_shipment_menus.xml
+@@ -0,0 +1,31 @@
++<?xml version="1.0" encoding="utf-8"?>
++<odoo>
++
++    <menuitem id="menu_cw_shipment_root"
++              name="Shipments"
++              sequence="55"
++              web_icon="cw_shipment,static/description/icon.png"/>
++
++    <menuitem id="menu_cw_shipment_operations"
++              name="Operations"
++              parent="menu_cw_shipment_root"
++              sequence="10"/>
++
++    <menuitem id="menu_cw_shipment_list"
++              name="Shipments"
++              parent="menu_cw_shipment_operations"
++              action="action_cw_shipment"
++              sequence="10"/>
++
++    <menuitem id="menu_cw_shipment_config"
++              name="Configuration"
++              parent="menu_cw_shipment_root"
++              sequence="90"/>
++
++    <menuitem id="menu_cw_port"
++              name="Ports"
++              parent="menu_cw_shipment_config"
++              action="action_cw_port"
++              sequence="10"/>
++
++</odoo>
+diff --git a/cw_shipment/views/cw_shipment_views.xml b/cw_shipment/views/cw_shipment_views.xml
+new file mode 100644
+index 0000000..7ef3461
+--- /dev/null
++++ b/cw_shipment/views/cw_shipment_views.xml
+@@ -0,0 +1,186 @@
++<?xml version="1.0" encoding="utf-8"?>
++<odoo>
++
++    <!-- ===== Shipment list ===== -->
++    <record id="view_cw_shipment_list" model="ir.ui.view">
++        <field name="name">cw.shipment.list</field>
++        <field name="model">cw.shipment</field>
++        <field name="arch" type="xml">
++            <list string="Shipments" multi_edit="1"
++                  decoration-success="status == 'delivered'"
++                  decoration-info="status == 'shipped'"
++                  decoration-warning="status == 'cargo_ready'"
++                  decoration-muted="status == 'cancelled'">
++                <field name="pi_no"/>
++                <field name="customer_id"/>
++                <field name="supplier_id"/>
++                <field name="forwarder_id" optional="show"/>
++                <field name="port_of_loading_id" optional="show"/>
++                <field name="destination_port_id" optional="show"/>
++                <field name="earliest_etd" optional="show"/>
++                <field name="latest_eta" optional="show"/>
++                <field name="container_count" optional="show"/>
++                <field name="total_cbm" sum="Total CBM" optional="hide"/>
++                <field name="gross_weight" sum="Total GW" optional="hide"/>
++                <field name="invoice_amount" sum="Total Invoice" optional="show"/>
++                <field name="currency_id" optional="hide"/>
++                <field name="status" widget="badge"
++                       decoration-success="status == 'delivered'"
++                       decoration-info="status == 'shipped'"
++                       decoration-warning="status == 'cargo_ready'"
++                       decoration-muted="status == 'cancelled'"/>
++            </list>
++        </field>
++    </record>
++
++    <!-- ===== Shipment form ===== -->
++    <record id="view_cw_shipment_form" model="ir.ui.view">
++        <field name="name">cw.shipment.form</field>
++        <field name="model">cw.shipment</field>
++        <field name="arch" type="xml">
++            <form string="Shipment">
++                <header>
++                    <field name="status" widget="statusbar"
++                           statusbar_visible="draft,cargo_ready,booked,shipped,arrived,delivered"/>
++                </header>
++                <sheet>
++                    <div class="oe_title">
++                        <label for="pi_no" string="PI No."/>
++                        <h1><field name="pi_no" placeholder="e.g. CW-128 RI"/></h1>
++                    </div>
++                    <group>
++                        <group string="Parties">
++                            <field name="customer_id"/>
++                            <field name="supplier_id"/>
++                            <field name="forwarder_id"/>
++                            <field name="term"/>
++                        </group>
++                        <group string="Cargo">
++                            <field name="description"/>
++                            <field name="ctn_pkg"/>
++                            <field name="gross_weight"/>
++                            <field name="total_cbm"/>
++                        </group>
++                    </group>
++                    <group>
++                        <group string="Ports">
++                            <field name="port_of_loading_id"/>
++                            <field name="destination_port_id"/>
++                        </group>
++                        <group string="Invoice">
++                            <field name="invoice_no"/>
++                            <field name="fty_pi"/>
++                            <label for="invoice_amount"/>
++                            <div class="o_row">
++                                <field name="invoice_amount"/>
++                                <field name="currency_id" options="{'no_create': True, 'no_open': True}"/>
++                            </div>
++                            <field name="freight_cost"/>
++                        </group>
++                    </group>
++                    <notebook>
++                        <page string="Containers" name="containers">
++                            <field name="container_ids">
++                                <list editable="bottom">
++                                    <field name="sequence" widget="handle"/>
++                                    <field name="container_size"/>
++                                    <field name="cntr_number"/>
++                                    <field name="bl_number"/>
++                                    <field name="carrier_id"/>
++                                    <field name="vessel_name"/>
++                                    <field name="etd"/>
++                                    <field name="eta"/>
++                                </list>
++                                <form string="Container">
++                                    <sheet>
++                                        <group>
++                                            <group>
++                                                <field name="container_size"/>
++                                                <field name="cntr_number"/>
++                                                <field name="bl_number"/>
++                                                <field name="carrier_id"/>
++                                                <field name="vessel_name"/>
++                                            </group>
++                                            <group>
++                                                <field name="open_date"/>
++                                                <field name="closing_date"/>
++                                                <field name="si_cutoff"/>
++                                                <field name="vgm_cutoff"/>
++                                                <field name="etd"/>
++                                                <field name="eta_original"/>
++                                                <field name="eta"/>
++                                            </group>
++                                        </group>
++                                    </sheet>
++                                </form>
++                            </field>
++                        </page>
++                        <page string="Dates &amp; Docs" name="dates">
++                            <group>
++                                <group string="Production">
++                                    <field name="cargo_ready_date"/>
++                                    <field name="inspection_date"/>
++                                </group>
++                                <group string="Document flow">
++                                    <field name="doc_to_customer_date"/>
++                                    <field name="telex_released_date"/>
++                                    <field name="sent_doc_date"/>
++                                    <field name="courier"/>
++                                </group>
++                            </group>
++                        </page>
++                        <page string="Remarks" name="remarks">
++                            <field name="remarks" placeholder="Free-form notes about this shipment..."/>
++                        </page>
++                        <page string="Import Data" name="import_data" groups="base.group_no_one">
++                            <field name="import_raw" readonly="1"/>
++                        </page>
++                    </notebook>
++                </sheet>
++                <chatter/>
++            </form>
++        </field>
++    </record>
++
++    <!-- ===== Shipment search ===== -->
++    <record id="view_cw_shipment_search" model="ir.ui.view">
++        <field name="name">cw.shipment.search</field>
++        <field name="model">cw.shipment</field>
++        <field name="arch" type="xml">
++            <search string="Shipments">
++                <field name="pi_no"/>
++                <field name="customer_id"/>
++                <field name="supplier_id"/>
++                <field name="forwarder_id"/>
++                <field name="cntr_numbers" string="CNTR No."/>
++                <field name="bl_numbers" string="BL No."/>
++                <field name="port_of_loading_id"/>
++                <field name="destination_port_id"/>
++                <separator/>
++                <filter string="Draft" name="draft" domain="[('status','=','draft')]"/>
++                <filter string="Cargo Ready" name="cargo_ready" domain="[('status','=','cargo_ready')]"/>
++                <filter string="Shipped" name="shipped" domain="[('status','=','shipped')]"/>
++                <filter string="Arrived" name="arrived" domain="[('status','=','arrived')]"/>
++                <filter string="Delivered" name="delivered" domain="[('status','=','delivered')]"/>
++                <separator/>
++                <filter string="ETD this month" name="etd_this_month"
++                        domain="[('earliest_etd','&gt;=', context_today().replace(day=1).strftime('%Y-%m-%d'))]"/>
++                <separator/>
++                <filter string="Customer" name="group_customer" context="{'group_by':'customer_id'}"/>
++                <filter string="Supplier" name="group_supplier" context="{'group_by':'supplier_id'}"/>
++                <filter string="Forwarder" name="group_forwarder" context="{'group_by':'forwarder_id'}"/>
++                <filter string="Status" name="group_status" context="{'group_by':'status'}"/>
++                <filter string="Destination" name="group_destination" context="{'group_by':'destination_port_id'}"/>
++            </search>
++        </field>
++    </record>
++
++    <record id="action_cw_shipment" model="ir.actions.act_window">
++        <field name="name">Shipments</field>
++        <field name="res_model">cw.shipment</field>
++        <field name="view_mode">list,form</field>
++        <field name="search_view_id" ref="view_cw_shipment_search"/>
++        <field name="context">{'search_default_shipped': 1}</field>
++    </record>
++
++</odoo>
+-- 
+2.34.1
+

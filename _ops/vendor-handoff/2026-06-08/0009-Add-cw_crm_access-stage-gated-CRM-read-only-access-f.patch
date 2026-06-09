@@ -1,0 +1,174 @@
+From d4c00a7ae18aced9740606dcaa6b2fb68efc863c Mon Sep 17 00:00:00 2001
+From: cwintlhk <howardcheng@courtwell.com.hk>
+Date: Mon, 8 Jun 2026 11:45:48 +0200
+Subject: [PATCH 09/14] Add cw_crm_access: stage-gated CRM read-only access for
+ Accounting group
+
+---
+ cw_crm_access/__init__.py                     |  0
+ cw_crm_access/__manifest__.py                 | 79 +++++++++++++++++++
+ .../security/cw_crm_access_security.xml       | 44 +++++++++++
+ cw_crm_access/security/ir.model.access.csv    | 10 +++
+ 4 files changed, 133 insertions(+)
+ create mode 100644 cw_crm_access/__init__.py
+ create mode 100644 cw_crm_access/__manifest__.py
+ create mode 100644 cw_crm_access/security/cw_crm_access_security.xml
+ create mode 100644 cw_crm_access/security/ir.model.access.csv
+
+diff --git a/cw_crm_access/__init__.py b/cw_crm_access/__init__.py
+new file mode 100644
+index 0000000..e69de29
+diff --git a/cw_crm_access/__manifest__.py b/cw_crm_access/__manifest__.py
+new file mode 100644
+index 0000000..f905919
+--- /dev/null
++++ b/cw_crm_access/__manifest__.py
+@@ -0,0 +1,79 @@
++{
++    'name': 'Courtwell CRM Access (Accounting Viewer)',
++    'version': '19.0.1.0.0',
++    'category': 'Sales/CRM',
++    'summary': "Stage-gated CRM opportunity read-only access for the Accounting group",
++    'description': """
++Courtwell CRM Access — Accounting Viewer
++========================================
++
++Defines a security group **Accounting / CRM Viewer (Post-Proforma)** whose
++members can read opportunities once they reach the Proforma Invoice stage.
++Visibility is restricted to four pipeline stages:
++
++* Proforma Invoice
++* QC
++* Enroute
++* Upsell/Reorder
++
++Pure read-only by design
++------------------------
++This module is a strict CRM viewer. No create, write, or unlink on any
++model. Hilda's deposit-confirmation action lives elsewhere — she flips
++``sale.order.cw_deposit_received`` (owned by ``cw_shipping_workflow``)
++using the write permission she already has via
++``account.group_account_user`` (Bookkeeper). The flag's
++``cw_deposit_confirmed_by`` and ``cw_deposit_received_date`` are auto-set
++on flip; chatter tracking on the SO is the audit trail.
++
++ACL is declared from scratch in ``security/ir.model.access.csv`` (no
++inheritance of ``sales_team.group_sale_salesman``) so create and unlink
++on ``crm.lead`` are hard-denied. Read is granted on:
++
++* ``crm.lead`` (rule-gated to the four stages above)
++* ``crm.stage``, ``crm.team``, ``crm.tag``, ``crm.lost.reason``,
++  ``crm.recurring.plan`` — opportunity form rendering
++* ``utm.source``, ``utm.medium``, ``utm.campaign`` — marketing field
++  display
++
++``sale.order`` is intentionally **not** covered here — Bookkeeper already
++grants Accounting users full read+write on every SO in the company.
++
++Record rule
++-----------
++``ir.rule`` on ``crm.lead`` for the group, ``domain_force`` built at
++module-load time via ``eval`` so the ``sourcing_reference.crm_stage_*``
++XML IDs resolve to integer stage IDs. If a stage record is recreated,
++reload this module (``-u cw_crm_access``).
++
++Why named XML IDs (not ``stage_id.sequence >= 3``)
++--------------------------------------------------
++The recommended pattern for named-stage rules is XML-ID anchors, which
++survive stage renames and sequence re-shuffles. ``cw_shipping_workflow``
++uses positional ``sequence >= 3`` which silently includes Lost (seq 7)
++and On Hold (seq 8); this module excludes both — Accounting has no
++workflow on Lost or On Hold opps.
++
++Assignment
++----------
++Assigning users to the group is left to the administrator (UI:
++Settings → Users → select user → Other → Sales → tick "Accounting / CRM
++Viewer (Post-Proforma)"). The module does not pin specific users.
++""",
++    'author': 'Courtwell Internal',
++    'website': 'https://courtwell.com.hk',
++    'depends': [
++        'crm',
++        'sales_team',
++        'utm',
++        'sourcing_reference',
++    ],
++    'data': [
++        'security/cw_crm_access_security.xml',
++        'security/ir.model.access.csv',
++    ],
++    'license': 'LGPL-3',
++    'installable': True,
++    'application': False,
++    'auto_install': False,
++}
+diff --git a/cw_crm_access/security/cw_crm_access_security.xml b/cw_crm_access/security/cw_crm_access_security.xml
+new file mode 100644
+index 0000000..1c9e3ae
+--- /dev/null
++++ b/cw_crm_access/security/cw_crm_access_security.xml
+@@ -0,0 +1,44 @@
++<?xml version="1.0" encoding="utf-8"?>
++<odoo>
++    <data noupdate="0">
++
++        <!--
++            Accounting / CRM Viewer (Post-Proforma)
++
++            Hardened design: does NOT inherit sales_team.group_sale_salesman.
++            All ACL is declared from scratch in ir.model.access.csv so
++            create/unlink on crm.lead can be hard-denied.
++        -->
++        <record id="group_accounting_crm_viewer" model="res.groups">
++            <field name="name">Accounting / CRM Viewer (Post-Proforma)</field>
++            <field name="comment">Read and chatter on opportunities from Proforma Invoice onward. Granted to Accounting staff who need opportunity context for deposit confirmation, final invoicing, and AR follow-up.</field>
++        </record>
++
++        <!--
++            Record rule: post-proforma stages only
++
++            domain_force is built at module-load time via eval so XML IDs
++            from sourcing_reference resolve to integer stage IDs. If the
++            stage records are recreated, reload this module to refresh the
++            rule.
++        -->
++        <record id="rule_accounting_crm_viewer_lead_stages" model="ir.rule">
++            <field name="name">Accounting CRM Viewer: post-proforma opportunities only</field>
++            <field name="model_id" ref="crm.model_crm_lead"/>
++            <field name="groups" eval="[(4, ref('group_accounting_crm_viewer'))]"/>
++            <field name="domain_force" eval="str([
++                ('stage_id', 'in', [
++                    ref('sourcing_reference.crm_stage_proforma_invoice'),
++                    ref('sourcing_reference.crm_stage_qc'),
++                    ref('sourcing_reference.crm_stage_enroute'),
++                    ref('sourcing_reference.crm_stage_upsell_reorder'),
++                ]),
++            ])"/>
++            <field name="perm_read" eval="True"/>
++            <field name="perm_write" eval="False"/>
++            <field name="perm_create" eval="False"/>
++            <field name="perm_unlink" eval="False"/>
++        </record>
++
++    </data>
++</odoo>
+diff --git a/cw_crm_access/security/ir.model.access.csv b/cw_crm_access/security/ir.model.access.csv
+new file mode 100644
+index 0000000..ddd4410
+--- /dev/null
++++ b/cw_crm_access/security/ir.model.access.csv
+@@ -0,0 +1,10 @@
++id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
++access_crm_lead_accounting_viewer,access.crm.lead.accounting.viewer,crm.model_crm_lead,group_accounting_crm_viewer,1,0,0,0
++access_crm_stage_accounting_viewer,access.crm.stage.accounting.viewer,crm.model_crm_stage,group_accounting_crm_viewer,1,0,0,0
++access_crm_team_accounting_viewer,access.crm.team.accounting.viewer,sales_team.model_crm_team,group_accounting_crm_viewer,1,0,0,0
++access_crm_tag_accounting_viewer,access.crm.tag.accounting.viewer,sales_team.model_crm_tag,group_accounting_crm_viewer,1,0,0,0
++access_crm_lost_reason_accounting_viewer,access.crm.lost.reason.accounting.viewer,crm.model_crm_lost_reason,group_accounting_crm_viewer,1,0,0,0
++access_crm_recurring_plan_accounting_viewer,access.crm.recurring.plan.accounting.viewer,crm.model_crm_recurring_plan,group_accounting_crm_viewer,1,0,0,0
++access_utm_source_accounting_viewer,access.utm.source.accounting.viewer,utm.model_utm_source,group_accounting_crm_viewer,1,0,0,0
++access_utm_medium_accounting_viewer,access.utm.medium.accounting.viewer,utm.model_utm_medium,group_accounting_crm_viewer,1,0,0,0
++access_utm_campaign_accounting_viewer,access.utm.campaign.accounting.viewer,utm.model_utm_campaign,group_accounting_crm_viewer,1,0,0,0
+-- 
+2.34.1
+

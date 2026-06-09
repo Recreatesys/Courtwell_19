@@ -1,0 +1,2683 @@
+From 24d0eb5b7ff34674c55d06f5e7c9c13e771ddf57 Mon Sep 17 00:00:00 2001
+From: cwintlhk <howardcheng@courtwell.com.hk>
+Date: Mon, 8 Jun 2026 11:45:48 +0200
+Subject: [PATCH 07/14] Add cw_sourcing_inspection: structured pre-shipment /
+ DUPRO QC reports
+
+---
+ cw_sourcing_inspection/__init__.py            |   1 +
+ cw_sourcing_inspection/__manifest__.py        |  66 ++
+ ...urcing_inspection_expense_product_data.xml |  21 +
+ .../sourcing_inspection_sequence_data.xml     |  17 +
+ cw_sourcing_inspection/models/__init__.py     |   2 +
+ .../models/sourcing_inspection.py             | 891 ++++++++++++++++++
+ .../models/sourcing_inspection_sku_line.py    |  48 +
+ .../reports/sourcing_inspection_report.xml    |  41 +
+ .../sourcing_inspection_report_templates.xml  | 369 ++++++++
+ .../cw_sourcing_inspection_groups.xml         |  59 ++
+ .../security/cw_sourcing_inspection_rules.xml |  43 +
+ .../security/ir.model.access.csv              |   7 +
+ .../sourcing_inspection_dashboard_views.xml   | 186 ++++
+ .../views/sourcing_inspection_menus.xml       |  62 ++
+ .../views/sourcing_inspection_views.xml       | 738 +++++++++++++++
+ 15 files changed, 2551 insertions(+)
+ create mode 100644 cw_sourcing_inspection/__init__.py
+ create mode 100644 cw_sourcing_inspection/__manifest__.py
+ create mode 100644 cw_sourcing_inspection/data/sourcing_inspection_expense_product_data.xml
+ create mode 100644 cw_sourcing_inspection/data/sourcing_inspection_sequence_data.xml
+ create mode 100644 cw_sourcing_inspection/models/__init__.py
+ create mode 100644 cw_sourcing_inspection/models/sourcing_inspection.py
+ create mode 100644 cw_sourcing_inspection/models/sourcing_inspection_sku_line.py
+ create mode 100644 cw_sourcing_inspection/reports/sourcing_inspection_report.xml
+ create mode 100644 cw_sourcing_inspection/reports/sourcing_inspection_report_templates.xml
+ create mode 100644 cw_sourcing_inspection/security/cw_sourcing_inspection_groups.xml
+ create mode 100644 cw_sourcing_inspection/security/cw_sourcing_inspection_rules.xml
+ create mode 100644 cw_sourcing_inspection/security/ir.model.access.csv
+ create mode 100644 cw_sourcing_inspection/views/sourcing_inspection_dashboard_views.xml
+ create mode 100644 cw_sourcing_inspection/views/sourcing_inspection_menus.xml
+ create mode 100644 cw_sourcing_inspection/views/sourcing_inspection_views.xml
+
+diff --git a/cw_sourcing_inspection/__init__.py b/cw_sourcing_inspection/__init__.py
+new file mode 100644
+index 0000000..0650744
+--- /dev/null
++++ b/cw_sourcing_inspection/__init__.py
+@@ -0,0 +1 @@
++from . import models
+diff --git a/cw_sourcing_inspection/__manifest__.py b/cw_sourcing_inspection/__manifest__.py
+new file mode 100644
+index 0000000..513681f
+--- /dev/null
++++ b/cw_sourcing_inspection/__manifest__.py
+@@ -0,0 +1,66 @@
++{
++    'name': "CW Sourcing Inspection (QC)",
++    'version': '19.0.1.3.0',
++    'category': 'Inventory/Purchase',
++    'summary': "Pre-shipment / DUPRO / factory inspection records — "
++               "English-language equivalent of Courtwell's existing "
++               "Chinese paper QC form, with project/PO/SO linkage.",
++    'description': """
++Courtwell — Sourcing Inspection (QC)
++====================================
++
++Captures pre-shipment inspections in structured form, replacing the
++existing Chinese paper inspection report. Designed to match the actual
++checklist structure used in the field (6 inspection categories with
++sub-item booleans + per-section pass/fail), plus:
++
++* Per-SKU detail grid (Item No., Ordered Qty, Sampled Qty, outcome)
++* Free-text inspection comments + improvement notes
++* Final 4-state outcome (Pass / Rework / Fail / Pending)
++* Linkage to project, sale order, purchase order, supplier
++* Re-inspection chain via parent_inspection_id
++* Inspection cost field (flows to project analytic via same pattern
++  as cw_freight_expense, when an inspection_cost is entered)
++* Chatter for photos + report attachments + back-and-forth comments
++
++Deliberately omitted (future iterations)
++----------------------------------------
++* AQL sampling fields + defect-count tracking (the paper form doesn't
++  use them; add when statistical QC discipline is introduced)
++* PDF report template matching the form layout (separate iteration)
++* Email templates for inspection request / result notification
++* Project-stage gate enforcement (e.g. Failed blocks Goods Ready)
++""",
++    'author': 'Courtwell Internal',
++    'website': 'https://courtwell.com.hk',
++    'depends': [
++        'base',
++        'mail',
++        'contacts',
++        'crm',
++        'sale_management',
++        'purchase',
++        'project',
++        'project_account',
++        'hr_expense',
++        'analytic',
++        'cw_contacts_phase1',
++        'sourcing_reference',
++    ],
++    'data': [
++        'security/cw_sourcing_inspection_groups.xml',
++        'security/ir.model.access.csv',
++        'security/cw_sourcing_inspection_rules.xml',
++        'data/sourcing_inspection_sequence_data.xml',
++        'data/sourcing_inspection_expense_product_data.xml',
++        'reports/sourcing_inspection_report.xml',
++        'reports/sourcing_inspection_report_templates.xml',
++        'views/sourcing_inspection_views.xml',
++        'views/sourcing_inspection_dashboard_views.xml',
++        'views/sourcing_inspection_menus.xml',
++    ],
++    'license': 'LGPL-3',
++    'installable': True,
++    'application': False,
++    'auto_install': False,
++}
+diff --git a/cw_sourcing_inspection/data/sourcing_inspection_expense_product_data.xml b/cw_sourcing_inspection/data/sourcing_inspection_expense_product_data.xml
+new file mode 100644
+index 0000000..3bece54
+--- /dev/null
++++ b/cw_sourcing_inspection/data/sourcing_inspection_expense_product_data.xml
+@@ -0,0 +1,21 @@
++<?xml version="1.0" encoding="utf-8"?>
++<odoo noupdate="1">
++
++    <!--
++        Expense product used when posting inspection cost as an hr.expense.
++        Same shape as the cw_freight_expense freight products:
++          * service type, no inventory
++          * can_be_expensed = True
++          * sale_ok / purchase_ok = False (not exposed in SO/PO line pickers)
++    -->
++    <record id="product_inspection_qc_cost" model="product.template">
++        <field name="name">Inspection — QC Cost</field>
++        <field name="type">service</field>
++        <field name="can_be_expensed" eval="True"/>
++        <field name="sale_ok" eval="False"/>
++        <field name="purchase_ok" eval="False"/>
++        <field name="standard_price">0.0</field>
++        <field name="description">Cost paid to a third-party inspection company (SGS / Bureau Veritas / Intertek / etc.) or internal QC field-trip cost. Generated by cw_sourcing_inspection when an inspection is completed with a non-zero cost.</field>
++    </record>
++
++</odoo>
+diff --git a/cw_sourcing_inspection/data/sourcing_inspection_sequence_data.xml b/cw_sourcing_inspection/data/sourcing_inspection_sequence_data.xml
+new file mode 100644
+index 0000000..dc3155a
+--- /dev/null
++++ b/cw_sourcing_inspection/data/sourcing_inspection_sequence_data.xml
+@@ -0,0 +1,17 @@
++<?xml version="1.0" encoding="utf-8"?>
++<odoo noupdate="1">
++
++    <!--
++        Fallback sequence for inspections that aren't linked to a
++        project (and so can't use the QCI-{base}-{NN} format).
++        Format: QCI/YYYY/####
++    -->
++    <record id="seq_sourcing_inspection" model="ir.sequence">
++        <field name="name">Sourcing Inspection Sequence</field>
++        <field name="code">sourcing.inspection</field>
++        <field name="prefix">QCI/%(year)s/</field>
++        <field name="padding">4</field>
++        <field name="company_id" eval="False"/>
++    </record>
++
++</odoo>
+diff --git a/cw_sourcing_inspection/models/__init__.py b/cw_sourcing_inspection/models/__init__.py
+new file mode 100644
+index 0000000..a95923c
+--- /dev/null
++++ b/cw_sourcing_inspection/models/__init__.py
+@@ -0,0 +1,2 @@
++from . import sourcing_inspection
++from . import sourcing_inspection_sku_line
+diff --git a/cw_sourcing_inspection/models/sourcing_inspection.py b/cw_sourcing_inspection/models/sourcing_inspection.py
+new file mode 100644
+index 0000000..e92e9dc
+--- /dev/null
++++ b/cw_sourcing_inspection/models/sourcing_inspection.py
+@@ -0,0 +1,891 @@
++from odoo import _, api, fields, models
++from odoo.exceptions import UserError
++
++
++class SourcingInspection(models.Model):
++    """Pre-shipment / DUPRO / factory inspection record.
++
++    Schema mirrors Courtwell's existing paper QC form (six checklist
++    categories with sub-item booleans + per-section pass/fail), with
++    additional structured linkage to project / SO / PO / supplier so
++    inspection cost and outcome flow into the same analytic-account
++    architecture used by freight expenses.
++    """
++    _name = 'sourcing.inspection'
++    _description = 'Sourcing QC Inspection'
++    _inherit = ['mail.thread', 'mail.activity.mixin']
++    _order = 'inspection_date desc, id desc'
++    _rec_name = 'name'
++
++    # ------------------------------------------------------------------
++    # Identity + dates
++    # ------------------------------------------------------------------
++    name = fields.Char(
++        string='Reference',
++        default=lambda self: _('New'),
++        readonly=True,
++        copy=False,
++        index=True,
++    )
++    contract_number = fields.Char(
++        string='Contract / PO No.',
++        tracking=True,
++        help='External contract or PO number printed on the inspection '
++             'form (e.g. BC-1096). Free text — does not need to match '
++             'the system PO sequence.',
++    )
++    inspection_date = fields.Date(
++        string='Inspection Date',
++        default=fields.Date.context_today,
++        required=True,
++        tracking=True,
++    )
++    inspection_type = fields.Selection(
++        [
++            ('psi',         'Pre-Shipment Inspection (PSI)'),
++            ('dupro',       'During-Production Inspection (DUPRO)'),
++            ('factory_aud', 'Factory Audit'),
++            ('loading',     'Loading Supervision'),
++            ('lab_test',    'Lab Test'),
++            ('reinspect',   'Re-Inspection'),
++        ],
++        string='Inspection Type',
++        default='psi',
++        required=True,
++        tracking=True,
++    )
++
++    # ------------------------------------------------------------------
++    # Parties
++    # ------------------------------------------------------------------
++    supplier_id = fields.Many2one(
++        'res.partner',
++        string='Supplier',
++        domain=[('contact_type', '=', 'supplier')],
++        tracking=True,
++        help='Supplier whose goods are being inspected. When set, the '
++             'factory name and address default from the supplier record.',
++    )
++    factory_name = fields.Char(
++        string='Factory Name',
++        tracking=True,
++        help='Display name printed on the inspection form. Defaults from '
++             'the linked supplier; can be overridden for sub-factory '
++             'scenarios.',
++    )
++    factory_address = fields.Char(
++        string='Factory Address',
++    )
++    factory_contact_name = fields.Char(
++        string='Factory Person in Charge',
++        help='Factory-side signatory on the inspection report.',
++    )
++    inspector_user_id = fields.Many2one(
++        'res.users',
++        string='Inspector (Courtwell)',
++        default=lambda self: self.env.user,
++        required=True,
++        tracking=True,
++    )
++    inspector_partner_id = fields.Many2one(
++        'res.partner',
++        string='3rd-Party Inspector',
++        domain=[('contact_type', '=', 'service_provider')],
++        help='Optional. Set when a third-party inspection company '
++             '(SGS / Bureau Veritas / Intertek / etc.) is engaged. '
++             'Leave blank for in-house Courtwell QC.',
++    )
++
++    # ------------------------------------------------------------------
++    # Linkage to commercial chain
++    # ------------------------------------------------------------------
++    purchase_order_id = fields.Many2one(
++        'purchase.order',
++        string='Purchase Order',
++        tracking=True,
++    )
++    sale_order_id = fields.Many2one(
++        'sale.order',
++        string='Sale Order',
++        tracking=True,
++    )
++    project_id = fields.Many2one(
++        'project.project',
++        string='Project',
++        tracking=True,
++        help='Linked project. Used to derive the QCI- reference base and '
++             'to receive any inspection_cost via the project analytic '
++             'account.',
++    )
++    parent_inspection_id = fields.Many2one(
++        'sourcing.inspection',
++        string='Parent Inspection (for Re-Inspection)',
++        help='When this is a re-inspection of a previously failed check, '
++             'link to the original record.',
++    )
++    child_inspection_ids = fields.One2many(
++        'sourcing.inspection', 'parent_inspection_id',
++        string='Re-Inspections',
++    )
++    reinspection_count = fields.Integer(
++        compute='_compute_reinspection_count',
++    )
++
++    # ------------------------------------------------------------------
++    # 6 Inspection Categories — each has sub-item booleans + a per-
++    # section pass/fail result
++    # ------------------------------------------------------------------
++    # Carton (紙箱檢驗)
++    carton_check_shipping_marks = fields.Boolean(string='Shipping Marks')
++    carton_check_paper_quality  = fields.Boolean(string='Paper Quality')
++    carton_check_size_deviation = fields.Boolean(string='Size OK (no deviation)')
++    carton_check_barcode        = fields.Boolean(string='Barcode')
++    carton_check_sealing        = fields.Boolean(string='Sealing')
++    carton_check_appearance     = fields.Boolean(string='Appearance / Printing')
++    carton_result = fields.Selection(
++        [('pass', 'Pass'), ('fail', 'Fail')],
++        string='Carton Result',
++    )
++
++    # Packaging (包裝檢驗)
++    packaging_check_method      = fields.Boolean(string='Packing Method')
++    packaging_check_protection  = fields.Boolean(string='Well Protected')
++    packaging_check_material    = fields.Boolean(string='Material Correct')
++    packaging_check_color_card  = fields.Boolean(string='Color Card Correct')
++    packaging_check_quantity    = fields.Boolean(string='Quantity Correct')
++    packaging_result = fields.Selection(
++        [('pass', 'Pass'), ('fail', 'Fail')],
++        string='Packaging Result',
++    )
++
++    # Accessories (配件檢驗)
++    accessories_check_nameplate    = fields.Boolean(string='Nameplate')
++    accessories_check_hangtag      = fields.Boolean(string='Hangtag')
++    accessories_check_origin_label = fields.Boolean(string='Country-of-Origin Label')
++    accessories_check_position     = fields.Boolean(string='Position Correct')
++    accessories_check_manual       = fields.Boolean(string='Instruction Manual')
++    accessories_check_accessories  = fields.Boolean(string='Accessories Present')
++    accessories_result = fields.Selection(
++        [('pass', 'Pass'), ('fail', 'Fail')],
++        string='Accessories Result',
++    )
++
++    # Component (分件檢測)
++    component_check_quantity       = fields.Boolean(string='Quantity')
++    component_check_material       = fields.Boolean(string='Material')
++    component_check_dimensions     = fields.Boolean(string='Dimensions')
++    component_check_color_matching = fields.Boolean(string='Color Matching')
++    component_check_other          = fields.Boolean(string='Other Component Notes')
++    component_result = fields.Selection(
++        [('pass', 'Pass'), ('fail', 'Fail')],
++        string='Component Result',
++    )
++
++    # Structural (結構檢測)
++    structural_check_structure = fields.Boolean(string='Structural Test')
++    structural_check_function  = fields.Boolean(string='Functional Test')
++    structural_result = fields.Selection(
++        [('pass', 'Pass'), ('fail', 'Fail')],
++        string='Structural Result',
++    )
++
++    # Overall (整體檢測)
++    overall_check_overall    = fields.Boolean(string='Overall Inspection')
++    overall_check_appearance = fields.Boolean(string='Appearance Inspection')
++    overall_result = fields.Selection(
++        [('pass', 'Pass'), ('fail', 'Fail')],
++        string='Overall Result',
++    )
++
++    # Other / catch-all
++    other_notes = fields.Text(string='Other Inspection Notes')
++    other_result = fields.Selection(
++        [('pass', 'Pass'), ('fail', 'Fail')],
++        string='Other Result',
++    )
++
++    # ------------------------------------------------------------------
++    # Per-SKU detail lines (the bottom grid in the paper form)
++    # ------------------------------------------------------------------
++    sku_line_ids = fields.One2many(
++        'sourcing.inspection.sku.line', 'inspection_id',
++        string='SKU Detail Lines',
++    )
++
++    # ------------------------------------------------------------------
++    # Free-text blocks (paper form: 驗貨評語/問題 + 備註/改進)
++    # ------------------------------------------------------------------
++    inspection_comments = fields.Text(
++        string='Inspection Comments / Issues',
++        help='Free text. Use for findings, measured-vs-spec deltas, '
++             'observations, and anything not captured in the checklists.',
++    )
++    improvement_notes = fields.Text(
++        string='Improvement Notes',
++        help='Free text. Recommended actions, follow-ups, lessons for '
++             'next batch.',
++    )
++
++    # ------------------------------------------------------------------
++    # Final outcome
++    # ------------------------------------------------------------------
++    final_outcome = fields.Selection(
++        [
++            ('pass',    'Pass'),
++            ('rework',  'Rework Required'),
++            ('fail',    'Fail'),
++            ('pending', 'Pending'),
++        ],
++        string='Quality Confirmation',
++        tracking=True,
++        help='Final inspection verdict, signed off by the Courtwell '
++             'inspector. Drives downstream gating (shipment release, '
++             're-inspection scheduling, etc.) in future iterations.',
++    )
++    bulk_completion_pct = fields.Float(
++        string='Bulk Completion %',
++        default=100.0,
++        help='Percentage of the bulk order produced at the time of '
++             'inspection. 100% for PSI; lower for DUPRO mid-production '
++             'checks.',
++    )
++
++    # ------------------------------------------------------------------
++    # Workflow state
++    #
++    # New `submitted` state sits between in_progress and completed:
++    # QC personnel transition from in_progress -> submitted by clicking
++    # "Submit to Merchandiser". The merchandiser must then act
++    # (decision = load_for_shipping / hold / reject_load) which closes
++    # the record to completed.
++    # ------------------------------------------------------------------
++    state = fields.Selection(
++        [
++            ('draft',       'Draft'),
++            ('scheduled',   'Scheduled'),
++            ('in_progress', 'In Progress'),
++            ('submitted',   'Submitted (Pending Review)'),
++            ('completed',   'Completed'),
++            ('cancelled',   'Cancelled'),
++        ],
++        string='State',
++        default='draft',
++        tracking=True,
++        copy=False,
++    )
++
++    # ------------------------------------------------------------------
++    # Merchandiser review (Phase 1: split UI + same-day review gate)
++    # ------------------------------------------------------------------
++    merchandiser_user_id = fields.Many2one(
++        'res.users',
++        string='Reviewer (Merchandiser)',
++        tracking=True,
++        help='Merchandiser responsible for reviewing this inspection '
++             'after QC submits it. Defaults from the linked project '
++             'or sale order. Receives a same-day activity on submit.',
++    )
++    qc_submitted_at = fields.Datetime(
++        string='Submitted by QC',
++        readonly=True,
++        copy=False,
++        tracking=True,
++    )
++    merchandiser_decision = fields.Selection(
++        [
++            ('load_for_shipping', 'Load for Shipping'),
++            ('hold',              'Hold'),
++            ('reject_load',       'Reject Loading'),
++        ],
++        string='Loading Decision',
++        copy=False,
++        tracking=True,
++        help='Merchandiser\'s decision on whether the inspected goods '
++             'can be loaded for shipping. Only "Load for Shipping" '
++             'clears the goods for the shipment workflow.',
++    )
++    merchandiser_review_date = fields.Date(
++        string='Reviewed On',
++        readonly=True,
++        copy=False,
++        tracking=True,
++    )
++    merchandiser_review_notes = fields.Text(
++        string='Reviewer Notes',
++        help='Merchandiser\'s commentary on the inspection, sent back to '
++             'QC if rework / re-inspection is required.',
++    )
++    is_overdue_review = fields.Boolean(
++        string='Overdue Review',
++        compute='_compute_is_overdue_review',
++        search='_search_is_overdue_review',
++        help='True when QC has submitted, no decision is set, and the '
++             'submission date is before today.',
++    )
++
++    # ------------------------------------------------------------------
++    # Photos (phone-captured inspection photos)
++    #
++    # Many2many to ir.attachment so the Odoo mobile app's attachment
++    # button can append multiple photos directly from the device camera
++    # or gallery. Separate from the chatter so the photo gallery is the
++    # primary surface, not buried in conversation.
++    # ------------------------------------------------------------------
++    inspection_photo_ids = fields.Many2many(
++        'ir.attachment',
++        'sourcing_inspection_photo_rel',
++        'inspection_id', 'attachment_id',
++        string='Inspection Photos',
++        help='Photos taken during the inspection. Use the mobile app\'s '
++             'attachment button (paperclip) to capture from camera or '
++             'pick from gallery — supports multiple uploads.',
++    )
++    inspection_photo_count = fields.Integer(
++        compute='_compute_inspection_photo_count',
++    )
++
++    # ------------------------------------------------------------------
++    # Cost (optional)
++    # ------------------------------------------------------------------
++    currency_id = fields.Many2one(
++        'res.currency',
++        string='Currency',
++        default=lambda self: self.env.company.currency_id.id,
++    )
++    inspection_cost = fields.Monetary(
++        string='Inspection Cost',
++        currency_field='currency_id',
++        help='Fee paid to the third-party inspector (if applicable). '
++             'Posts to the linked project\'s analytic account when '
++             'inspection is completed — same flow as freight expenses.',
++    )
++    cost_posted = fields.Boolean(
++        string='Cost Posted',
++        default=False,
++        copy=False,
++        tracking=True,
++        help='True once the inspection_cost has been posted as an '
++             'hr.expense record against the linked project analytic.',
++    )
++    inspection_expense_id = fields.Many2one(
++        'hr.expense',
++        string='Inspection Expense',
++        copy=False,
++        ondelete='set null',
++        help='The hr.expense record generated from this inspection.',
++    )
++
++    # ------------------------------------------------------------------
++    # Computes
++    # ------------------------------------------------------------------
++    @api.depends('child_inspection_ids')
++    def _compute_reinspection_count(self):
++        for rec in self:
++            rec.reinspection_count = len(rec.child_inspection_ids)
++
++    @api.depends('inspection_photo_ids')
++    def _compute_inspection_photo_count(self):
++        for rec in self:
++            rec.inspection_photo_count = len(rec.inspection_photo_ids)
++
++    @api.depends('state', 'qc_submitted_at', 'merchandiser_decision')
++    def _compute_is_overdue_review(self):
++        today = fields.Date.context_today(self)
++        for rec in self:
++            submitted = rec.qc_submitted_at and rec.qc_submitted_at.date()
++            rec.is_overdue_review = bool(
++                rec.state == 'submitted'
++                and not rec.merchandiser_decision
++                and submitted
++                and submitted < today
++            )
++
++    def _search_is_overdue_review(self, operator, value):
++        """Lets the search filter "Overdue Reviews" work by translating
++        the boolean compute into a real domain on stored fields."""
++        today_dt = fields.Datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
++        positive = (operator == '=' and value) or (operator == '!=' and not value)
++        if positive:
++            return [
++                ('state', '=', 'submitted'),
++                ('merchandiser_decision', '=', False),
++                ('qc_submitted_at', '<', today_dt),
++            ]
++        return ['|', '|',
++                ('state', '!=', 'submitted'),
++                ('merchandiser_decision', '!=', False),
++                ('qc_submitted_at', '>=', today_dt)]
++
++    # ------------------------------------------------------------------
++    # Onchanges
++    # ------------------------------------------------------------------
++    @api.onchange('supplier_id')
++    def _onchange_supplier_id_defaults(self):
++        for rec in self:
++            if rec.supplier_id and not rec.factory_name:
++                rec.factory_name = rec.supplier_id.name
++            if rec.supplier_id and not rec.factory_address:
++                # Build a one-line address from the supplier
++                parts = [
++                    rec.supplier_id.street,
++                    rec.supplier_id.street2,
++                    rec.supplier_id.city,
++                    rec.supplier_id.state_id.name if rec.supplier_id.state_id else None,
++                    rec.supplier_id.country_id.name if rec.supplier_id.country_id else None,
++                ]
++                rec.factory_address = ', '.join(p for p in parts if p)
++
++    @api.onchange('purchase_order_id')
++    def _onchange_purchase_order_id_defaults(self):
++        for rec in self:
++            if rec.purchase_order_id:
++                if not rec.contract_number:
++                    rec.contract_number = rec.purchase_order_id.name
++                if not rec.supplier_id:
++                    rec.supplier_id = rec.purchase_order_id.partner_id
++
++    @api.onchange('parent_inspection_id')
++    def _onchange_parent_inspection_id(self):
++        for rec in self:
++            if rec.parent_inspection_id:
++                rec.inspection_type = 'reinspect'
++                # Inherit linkage from parent for convenience
++                rec.supplier_id = rec.parent_inspection_id.supplier_id
++                rec.purchase_order_id = rec.parent_inspection_id.purchase_order_id
++                rec.sale_order_id = rec.parent_inspection_id.sale_order_id
++                rec.project_id = rec.parent_inspection_id.project_id
++                rec.merchandiser_user_id = rec.parent_inspection_id.merchandiser_user_id
++
++    @api.onchange('project_id', 'sale_order_id')
++    def _onchange_default_merchandiser(self):
++        """Default the merchandiser from the project's user_id, falling
++        back to the sale order's salesperson if no project."""
++        for rec in self:
++            if rec.merchandiser_user_id:
++                continue
++            if rec.project_id and rec.project_id.user_id:
++                rec.merchandiser_user_id = rec.project_id.user_id
++            elif rec.sale_order_id and rec.sale_order_id.user_id:
++                rec.merchandiser_user_id = rec.sale_order_id.user_id
++
++    # ------------------------------------------------------------------
++    # Reference generation
++    # ------------------------------------------------------------------
++    @api.model_create_multi
++    def create(self, vals_list):
++        for vals in vals_list:
++            if vals.get('name', _('New')) == _('New'):
++                vals['name'] = self._generate_inspection_ref(vals)
++        return super().create(vals_list)
++
++    @api.model
++    def _generate_inspection_ref(self, vals):
++        """Generate QCI reference.
++
++        Format:
++          - If project has sourcing_reference: QCI-{base}-{NN}
++            where {NN} = count of inspections on the same project + 1
++          - Otherwise: fallback to ir.sequence (QCI/YYYY/####)
++        """
++        project_id = vals.get('project_id')
++        if project_id:
++            project = self.env['project.project'].browse(project_id)
++            base_ref = (
++                project.sourcing_reference if hasattr(project, 'sourcing_reference')
++                else False
++            )
++            if base_ref:
++                base = base_ref.strip()
++                # Strip the project-doctype prefix (PR-) if present
++                if base.upper().startswith('PR-'):
++                    base = base[3:]
++                count = self.search_count([('project_id', '=', project_id)])
++                return f"QCI-{base}-{(count + 1):02d}"
++        return self.env['ir.sequence'].next_by_code(
++            'sourcing.inspection'
++        ) or _('New')
++
++    # ------------------------------------------------------------------
++    # Actions
++    # ------------------------------------------------------------------
++    def action_schedule(self):
++        self.write({'state': 'scheduled'})
++
++    def action_start(self):
++        self.write({'state': 'in_progress'})
++
++    def action_complete(self):
++        """Admin/reviewer bypass to skip the submit->review cycle.
++        Kept for back-compat and full-control scenarios."""
++        for rec in self:
++            if not rec.final_outcome:
++                raise UserError(_(
++                    "Set a Quality Confirmation outcome before completing "
++                    "inspection %s.", rec.name,
++                ))
++            rec.state = 'completed'
++            rec.message_post(body=_(
++                "Inspection completed. Outcome: <b>%s</b>. "
++                "Bulk completion: %.1f%%.",
++                dict(rec._fields['final_outcome'].selection).get(rec.final_outcome),
++                rec.bulk_completion_pct,
++            ))
++
++    # ------------------------------------------------------------------
++    # QC submission to Merchandiser
++    # ------------------------------------------------------------------
++    def action_submit_to_merchandiser(self):
++        """Called by QC personnel when they finish inspection in the field.
++
++        Validates that the QC outcome is set and a reviewer is assigned;
++        transitions state to 'submitted'; auto-creates a same-day
++        activity on the merchandiser so they review and decide on
++        loading.
++        """
++        for rec in self:
++            if rec.state not in ('draft', 'scheduled', 'in_progress'):
++                raise UserError(_(
++                    "Inspection %s is in state %s — only draft / "
++                    "scheduled / in-progress inspections can be "
++                    "submitted.",
++                    rec.name, rec.state,
++                ))
++            if not rec.final_outcome:
++                raise UserError(_(
++                    "Set the Quality Confirmation (Pass / Rework / "
++                    "Fail / Pending) before submitting inspection %s.",
++                    rec.name,
++                ))
++            if not rec.merchandiser_user_id:
++                raise UserError(_(
++                    "Assign a Merchandiser (Reviewer) on inspection %s "
++                    "before submitting. The reviewer receives an "
++                    "activity to act on the inspection.",
++                    rec.name,
++                ))
++            rec.write({
++                'state': 'submitted',
++                'qc_submitted_at': fields.Datetime.now(),
++            })
++            # Auto-create a same-day activity for the merchandiser
++            try:
++                act_type = rec.env.ref('mail.mail_activity_data_todo')
++                rec.activity_schedule(
++                    act_type_xmlid='mail.mail_activity_data_todo',
++                    summary=_('Review QC inspection %s and decide on loading',
++                              rec.name),
++                    note=_(
++                        "Field QC submitted inspection <b>%(name)s</b> "
++                        "(outcome: <b>%(out)s</b>, bulk: %(bulk).1f%%). "
++                        "Open the inspection and set the Loading Decision: "
++                        "Load for Shipping / Hold / Reject Loading.",
++                        name=rec.name,
++                        out=dict(rec._fields['final_outcome'].selection).get(
++                            rec.final_outcome,
++                        ),
++                        bulk=rec.bulk_completion_pct,
++                    ),
++                    date_deadline=fields.Date.context_today(rec),
++                    user_id=rec.merchandiser_user_id.id,
++                )
++            except Exception:
++                # If mail.mail_activity_data_todo isn't found, fall back
++                # to a chatter message — the workflow still progresses.
++                rec.message_post(
++                    body=_("Submitted by QC. Awaiting merchandiser review."),
++                    partner_ids=rec.merchandiser_user_id.partner_id.ids,
++                )
++            rec.message_post(body=_(
++                "Inspection submitted to <b>%s</b> for same-day review. "
++                "Outcome from QC: <b>%s</b>.",
++                rec.merchandiser_user_id.name,
++                dict(rec._fields['final_outcome'].selection).get(
++                    rec.final_outcome,
++                ),
++            ))
++        return True
++
++    # ------------------------------------------------------------------
++    # Merchandiser decisions
++    # ------------------------------------------------------------------
++    def _apply_merchandiser_decision(self, decision):
++        """Internal: record the decision and close the inspection.
++
++        Server-side group check: even though the decision buttons are
++        hidden from non-reviewers in the form view via `groups=`, the
++        method can still be called via RPC. This block ensures the
++        decision is genuinely reviewer-only at the server.
++
++        Side-effect: when the inspection completes with a non-zero
++        cost and a resolvable analytic account, the cost is auto-posted
++        as an hr.expense (best-effort — failures are logged but don't
++        block the decision).
++        """
++        self.ensure_one()
++        if not (
++            self.env.user.has_group('cw_sourcing_inspection.group_qc_reviewer')
++            or self.env.user.has_group('base.group_system')
++        ):
++            raise UserError(_(
++                "Only the QC Reviewer (Merchandiser) or an Admin can "
++                "set the loading decision on inspection %s.",
++                self.name,
++            ))
++        if self.state != 'submitted':
++            raise UserError(_(
++                "Inspection %s must be in 'Submitted' state for the "
++                "reviewer to set a decision (currently: %s).",
++                self.name, self.state,
++            ))
++        self.write({
++            'merchandiser_decision': decision,
++            'merchandiser_review_date': fields.Date.context_today(self),
++            'state': 'completed',
++        })
++        # Mark related activity done
++        activities = self.activity_ids.filtered(
++            lambda a: a.user_id == self.merchandiser_user_id
++        )
++        if activities:
++            activities.action_feedback(feedback=_('Decision: %s', decision))
++        label = dict(self._fields['merchandiser_decision'].selection).get(decision)
++        self.message_post(body=_(
++            "Loading decision: <b>%s</b> by %s.",
++            label, self.env.user.name,
++        ))
++        # Auto-post cost (best-effort). Fails silently with a chatter
++        # note so the decision flow isn't blocked by an analytic issue.
++        if self.inspection_cost > 0 and not self.cost_posted:
++            try:
++                self._do_post_inspection_cost()
++            except UserError as e:
++                self.message_post(body=_(
++                    "Auto-post of inspection cost skipped: %s "
++                    "Use the 'Post Cost' button on the inspection "
++                    "form once the linkage is fixed.", str(e),
++                ))
++
++    # ------------------------------------------------------------------
++    # Inspection cost -> hr.expense posting (same pattern as freight)
++    # ------------------------------------------------------------------
++    EXPENSE_PRODUCT_REF = 'cw_sourcing_inspection.product_inspection_qc_cost'
++
++    def _resolve_inspection_analytic(self):
++        """Resolve the analytic account that will receive the cost.
++
++        Priority:
++          1. project_id.account_id
++          2. project found via sale.order line linkage (if sale_order_id set)
++          3. False (caller decides how to handle)
++        """
++        self.ensure_one()
++        if self.project_id and self.project_id.account_id:
++            return self.project_id.account_id
++        if self.sale_order_id:
++            # SO -> any project via order_line.project_id
++            line_projects = self.sale_order_id.order_line.mapped('project_id')
++            if line_projects and line_projects[0].account_id:
++                return line_projects[0].account_id
++        return False
++
++    def _resolve_inspection_expense_employee(self):
++        """The hr.employee record to attach the expense to. Defaults to
++        the inspector's employee link; falls back to current user's."""
++        self.ensure_one()
++        user = self.inspector_user_id or self.env.user
++        emp = user.employee_id
++        if not emp and user.employee_ids:
++            emp = user.employee_ids[:1]
++        return emp
++
++    def _do_post_inspection_cost(self):
++        """Internal: create the hr.expense record. Raises UserError on
++        misconfigurations (used by both the manual action and the
++        auto-trigger)."""
++        self.ensure_one()
++        if self.cost_posted:
++            raise UserError(_(
++                "Inspection %s already has a cost posted (expense %s). "
++                "Reset first if you need to re-post.",
++                self.name,
++                self.inspection_expense_id.name if self.inspection_expense_id
++                else _('(unknown)'),
++            ))
++        if self.inspection_cost <= 0:
++            raise UserError(_(
++                "No inspection cost to post on %s.", self.name,
++            ))
++        analytic = self._resolve_inspection_analytic()
++        if not analytic:
++            raise UserError(_(
++                "No analytic account resolvable for %s. Link a project "
++                "with an analytic account before posting cost.",
++                self.name,
++            ))
++        employee = self._resolve_inspection_expense_employee()
++        if not employee:
++            user = self.inspector_user_id or self.env.user
++            raise UserError(_(
++                "Inspector %s has no linked Employee record. Configure "
++                "in HR before posting inspection cost.",
++                user.name,
++            ))
++        product_tmpl = self.env.ref(self.EXPENSE_PRODUCT_REF,
++                                    raise_if_not_found=False)
++        if not product_tmpl:
++            raise UserError(_(
++                "Expense product '%s' missing — module data file may not "
++                "have loaded.", self.EXPENSE_PRODUCT_REF,
++            ))
++        variant = product_tmpl.product_variant_id
++        if not variant:
++            raise UserError(_(
++                "Expense product '%s' has no active variant.",
++                self.EXPENSE_PRODUCT_REF,
++            ))
++        expense = self.env['hr.expense'].create({
++            'name': _('%s — Inspection Cost', self.name),
++            'employee_id': employee.id,
++            'product_id': variant.id,
++            'quantity': 1.0,
++            'price_unit': self.inspection_cost,
++            'total_amount': self.inspection_cost,
++            'currency_id': self.currency_id.id,
++            'payment_mode': 'company_account',
++            'analytic_distribution': {str(analytic.id): 100.0},
++            'date': fields.Date.context_today(self),
++        })
++        self.write({
++            'cost_posted': True,
++            'inspection_expense_id': expense.id,
++        })
++        self.message_post(body=_(
++            "Inspection cost <b>%(amt).2f %(curr)s</b> posted as expense "
++            "<a href=# data-oe-model='hr.expense' data-oe-id='%(eid)d'>%(ename)s</a> "
++            "on analytic account <b>%(acc)s</b>.",
++            amt=self.inspection_cost,
++            curr=self.currency_id.name,
++            eid=expense.id, ename=expense.name,
++            acc=analytic.display_name,
++        ))
++        return expense
++
++    def action_post_inspection_cost(self):
++        for rec in self:
++            rec._do_post_inspection_cost()
++        return True
++
++    def action_reset_inspection_cost(self):
++        """Undo cost posting. Deletes the expense only if still in draft."""
++        for rec in self:
++            if not rec.cost_posted:
++                continue
++            exp = rec.inspection_expense_id
++            if exp and exp.state == 'draft':
++                exp.unlink()
++            elif exp:
++                raise UserError(_(
++                    "Cannot reset cost on %s — linked expense %s is in "
++                    "state '%s', not draft. Void/refuse it in the "
++                    "Expense app first.",
++                    rec.name, exp.name, exp.state,
++                ))
++            rec.write({
++                'cost_posted': False,
++                'inspection_expense_id': False,
++            })
++            rec.message_post(body=_("Inspection cost posting reset."))
++        return True
++
++    def action_view_inspection_expense(self):
++        self.ensure_one()
++        if not self.inspection_expense_id:
++            raise UserError(_("No expense posted for this inspection."))
++        return {
++            'type': 'ir.actions.act_window',
++            'res_model': 'hr.expense',
++            'res_id': self.inspection_expense_id.id,
++            'view_mode': 'form',
++            'target': 'current',
++        }
++
++    def action_decision_load(self):
++        for rec in self:
++            rec._apply_merchandiser_decision('load_for_shipping')
++        return True
++
++    def action_decision_hold(self):
++        for rec in self:
++            rec._apply_merchandiser_decision('hold')
++        return True
++
++    def action_decision_reject(self):
++        for rec in self:
++            rec._apply_merchandiser_decision('reject_load')
++        return True
++
++    def action_send_back_to_qc(self):
++        """Send inspection back to QC for rework / additional info,
++        without recording a loading decision."""
++        for rec in self:
++            if rec.state != 'submitted':
++                raise UserError(_(
++                    "Can only send back inspections in 'Submitted' state."
++                ))
++            rec.write({'state': 'in_progress'})
++            rec.message_post(body=_(
++                "Sent back to QC (%s) by %s for additional work or "
++                "clarification.",
++                rec.inspector_user_id.name, rec.env.user.name,
++            ))
++            # Reassign the activity to QC
++            rec.activity_schedule(
++                act_type_xmlid='mail.mail_activity_data_todo',
++                summary=_('Review / amend inspection %s — sent back by '
++                          'merchandiser', rec.name),
++                date_deadline=fields.Date.context_today(rec),
++                user_id=rec.inspector_user_id.id,
++            )
++        return True
++
++    def action_cancel(self):
++        self.write({'state': 'cancelled'})
++
++    def action_reset_to_draft(self):
++        self.write({'state': 'draft'})
++
++    def action_create_reinspection(self):
++        """Convenience action: clone this inspection as a re-inspection,
++        with parent_inspection_id set."""
++        self.ensure_one()
++        if self.final_outcome not in ('fail', 'rework'):
++            raise UserError(_(
++                "Re-inspection is only meaningful when the prior outcome "
++                "was Fail or Rework Required. Current outcome: %s.",
++                self.final_outcome or _('(not set)'),
++            ))
++        new_insp = self.copy({
++            'parent_inspection_id': self.id,
++            'inspection_type': 'reinspect',
++            'state': 'draft',
++            'final_outcome': False,
++            'inspection_date': fields.Date.context_today(self),
++        })
++        return {
++            'type': 'ir.actions.act_window',
++            'res_model': 'sourcing.inspection',
++            'res_id': new_insp.id,
++            'view_mode': 'form',
++            'target': 'current',
++        }
++
++    def action_view_reinspections(self):
++        self.ensure_one()
++        return {
++            'type': 'ir.actions.act_window',
++            'name': _('Re-Inspections of %s', self.name),
++            'res_model': 'sourcing.inspection',
++            'view_mode': 'list,form',
++            'domain': [('parent_inspection_id', '=', self.id)],
++            'context': {'default_parent_inspection_id': self.id},
++        }
+diff --git a/cw_sourcing_inspection/models/sourcing_inspection_sku_line.py b/cw_sourcing_inspection/models/sourcing_inspection_sku_line.py
+new file mode 100644
+index 0000000..17e7075
+--- /dev/null
++++ b/cw_sourcing_inspection/models/sourcing_inspection_sku_line.py
+@@ -0,0 +1,48 @@
++from odoo import fields, models
++
++
++class SourcingInspectionSkuLine(models.Model):
++    """Per-SKU detail row of an inspection — corresponds to the bottom
++    grid of the paper QC form (貨號 / 訂單數量 / 抽驗數量 / 質量通過 /
++    立即修復 / 不可修復).
++
++    Optional: many inspections (single-SKU shipments) won't need lines
++    at all. Useful when one inspection covers multiple LED bulb models,
++    for example.
++    """
++    _name = 'sourcing.inspection.sku.line'
++    _description = 'Inspection SKU Detail Line'
++    _order = 'inspection_id, sequence, id'
++
++    inspection_id = fields.Many2one(
++        'sourcing.inspection',
++        string='Inspection',
++        required=True,
++        ondelete='cascade',
++        index=True,
++    )
++    sequence = fields.Integer(default=10)
++
++    item_code = fields.Char(
++        string='Item No.',
++        help='Supplier SKU / item code printed on the inspection form.',
++    )
++    product_id = fields.Many2one(
++        'product.product',
++        string='Product',
++        help='Optional link to a system product. Free-text item_code '
++             'is the primary identifier.',
++    )
++    description = fields.Char(
++        string='Description',
++        help='Product description or specification note.',
++    )
++
++    ordered_qty = fields.Float(string='Ordered Qty')
++    sampled_qty = fields.Float(string='Sampled Qty')
++
++    quality_pass    = fields.Boolean(string='Quality Pass')
++    immediate_repair = fields.Boolean(string='Immediate Repair')
++    not_repairable  = fields.Boolean(string='Not Repairable')
++
++    notes = fields.Char(string='Line Notes')
+diff --git a/cw_sourcing_inspection/reports/sourcing_inspection_report.xml b/cw_sourcing_inspection/reports/sourcing_inspection_report.xml
+new file mode 100644
+index 0000000..af9295a
+--- /dev/null
++++ b/cw_sourcing_inspection/reports/sourcing_inspection_report.xml
+@@ -0,0 +1,41 @@
++<?xml version="1.0" encoding="utf-8"?>
++<odoo>
++
++    <!--
++        Paper format: A4 portrait, tight margins so the 6 checklist
++        rows + per-SKU grid + comments + signature block all fit on a
++        single page for typical inspections.
++    -->
++    <record id="report_paperformat_qc_inspection" model="report.paperformat">
++        <field name="name">QC Inspection A4</field>
++        <field name="default" eval="False"/>
++        <field name="format">A4</field>
++        <field name="orientation">Portrait</field>
++        <field name="margin_top">10</field>
++        <field name="margin_bottom">10</field>
++        <field name="margin_left">10</field>
++        <field name="margin_right">10</field>
++        <field name="header_line" eval="False"/>
++        <field name="header_spacing">5</field>
++        <field name="dpi">90</field>
++    </record>
++
++    <!--
++        Report action — bilingual (Chinese + English on the same page).
++        Bound to sourcing.inspection so it appears in the Print dropdown
++        on the inspection form automatically. A dedicated Print button is
++        added separately in the form view for visibility.
++    -->
++    <record id="action_report_sourcing_inspection" model="ir.actions.report">
++        <field name="name">QC Inspection Report (中英文)</field>
++        <field name="model">sourcing.inspection</field>
++        <field name="report_type">qweb-pdf</field>
++        <field name="report_name">cw_sourcing_inspection.report_sourcing_inspection_document</field>
++        <field name="report_file">cw_sourcing_inspection.report_sourcing_inspection_document</field>
++        <field name="print_report_name">'QC Inspection - %s' % (object.name or '').replace('/','-')</field>
++        <field name="binding_model_id" ref="model_sourcing_inspection"/>
++        <field name="binding_type">report</field>
++        <field name="paperformat_id" ref="report_paperformat_qc_inspection"/>
++    </record>
++
++</odoo>
+diff --git a/cw_sourcing_inspection/reports/sourcing_inspection_report_templates.xml b/cw_sourcing_inspection/reports/sourcing_inspection_report_templates.xml
+new file mode 100644
+index 0000000..c4152dd
+--- /dev/null
++++ b/cw_sourcing_inspection/reports/sourcing_inspection_report_templates.xml
+@@ -0,0 +1,369 @@
++<?xml version="1.0" encoding="utf-8"?>
++<odoo>
++
++    <!--
++        Bilingual QC Inspection Report — Chinese (primary) + English
++        (secondary, smaller below or in parentheses), structured to
++        mirror Courtwell's existing paper QC form layout.
++
++        Font: WenQuanYi Micro Hei is installed on the Contabo server
++        (verified via fc-list). Listed first in the CSS font-family
++        chain to ensure consistent Chinese rendering in wkhtmltopdf;
++        falls back to Noto Sans CJK / Microsoft YaHei for other
++        deployments.
++    -->
++
++    <template id="report_sourcing_inspection_document">
++        <t t-call="web.html_container">
++            <t t-foreach="docs" t-as="o">
++                <t t-call="web.basic_layout">
++                    <div class="page" t-attf-style="{{ qc_root_style }}">
++
++                        <!-- ===== Inline CSS scoped to the report ===== -->
++                        <style>
++                            .qc-report {
++                                font-family: 'WenQuanYi Micro Hei', 'Noto Sans CJK SC', 'Microsoft YaHei', 'PingFang SC', sans-serif;
++                                font-size: 9.5pt;
++                                color: #000;
++                            }
++                            .qc-report h2 { margin: 0; font-size: 14pt; }
++                            .qc-report h3 { margin: 0; font-size: 11pt; letter-spacing: 1px; }
++                            .qc-report .firm-address { font-size: 8pt; line-height: 1.3; }
++                            .qc-report table { width: 100%; border-collapse: collapse; }
++                            .qc-report .meta-table td { padding: 3px 6px; border: 1px solid #555; font-size: 9.5pt; }
++                            .qc-report .meta-table .lbl { background: #eee; font-weight: bold; width: 14%; }
++                            .qc-report .legend { font-size: 8pt; padding: 4px 0; color: #555; }
++                            .qc-report .checklist td { border: 1px solid #555; padding: 4px 6px; vertical-align: middle; font-size: 9pt; }
++                            .qc-report .checklist .cat-name { background: #eee; font-weight: bold; width: 14%; }
++                            .qc-report .checklist .cat-items { width: 71%; }
++                            .qc-report .checklist .cat-result { width: 15%; text-align: center; font-weight: bold; }
++                            .qc-report .chk { display: inline-block; margin-right: 10px; white-space: nowrap; }
++                            .qc-report .chk-symbol { font-size: 11pt; vertical-align: middle; }
++                            .qc-report .pass { color: #2a7;  }
++                            .qc-report .fail { color: #c33; }
++                            .qc-report .neutral { color: #999; }
++                            .qc-report .sku-table th, .qc-report .sku-table td {
++                                border: 1px solid #555; padding: 4px 6px; font-size: 9pt; text-align: center;
++                            }
++                            .qc-report .sku-table th { background: #eee; }
++                            .qc-report .text-area {
++                                border: 1px solid #555; padding: 6px; min-height: 60px;
++                                white-space: pre-wrap; font-size: 9pt; margin-bottom: 8px;
++                            }
++                            .qc-report .outcome-bar {
++                                margin-top: 10px; padding: 10px; border: 2px solid #333;
++                                text-align: center; font-size: 12pt;
++                            }
++                            .qc-report .outcome-badge {
++                                display: inline-block; padding: 4px 14px;
++                                font-weight: bold; border: 2px solid #333; margin: 0 8px;
++                            }
++                            .qc-report .outcome-pass    { background: #d4f5dc; border-color: #2a7; }
++                            .qc-report .outcome-rework  { background: #fff4cc; border-color: #c93; }
++                            .qc-report .outcome-fail    { background: #fbd; border-color: #c33; }
++                            .qc-report .outcome-pending { background: #ddd; border-color: #888; }
++                            .qc-report .sig-table td {
++                                padding: 25px 6px 6px 6px; border-top: 1px solid #555;
++                                vertical-align: top; font-size: 9pt;
++                            }
++                            .qc-report .label-zh { font-weight: bold; }
++                            .qc-report .label-en { font-size: 8pt; color: #555; font-style: italic; }
++                            .qc-report .ref-id {
++                                font-family: 'Courier New', monospace;
++                                background: #eee; padding: 2px 6px; border: 1px solid #888;
++                            }
++                            .qc-report .firm-header { text-align: center; border-bottom: 2px solid #333; padding-bottom: 8px; margin-bottom: 10px; }
++                        </style>
++
++                        <div class="qc-report">
++
++                            <!-- ===== Firm Header ===== -->
++                            <div class="firm-header">
++                                <h2>國威國際有限公司</h2>
++                                <h3>COURTWELL INTERNATIONAL LTD.</h3>
++                                <div class="firm-address">
++                                    Flat C, 10/F., Kai Centre, 36 Hung To Road, Kwun Tong, Kowloon, Hong Kong<br/>
++                                    Tel: (852) 3797 5260 &#160;|&#160; Fax: (852) 3797 5264 &#160;|&#160; Email: courtwell@courtwell.com.hk
++                                </div>
++                            </div>
++
++                            <!-- ===== Title + Reference ===== -->
++                            <table style="margin-bottom: 6px;">
++                                <tr>
++                                    <td style="text-align: left; font-size: 11pt; font-weight: bold;">
++                                        驗貨報告 / Quality Inspection Report
++                                    </td>
++                                    <td style="text-align: right;">
++                                        <span class="ref-id"><t t-out="o.name"/></span>
++                                    </td>
++                                </tr>
++                            </table>
++
++                            <!-- ===== Metadata table ===== -->
++                            <table class="meta-table" style="margin-bottom: 6px;">
++                                <tr>
++                                    <td class="lbl">合同號<br/><span class="label-en">Contract No.</span></td>
++                                    <td><span t-out="o.contract_number or '—'"/></td>
++                                    <td class="lbl">工廠<br/><span class="label-en">Factory</span></td>
++                                    <td><span t-out="o.factory_name or (o.supplier_id.name if o.supplier_id else '—')"/></td>
++                                    <td class="lbl">日期<br/><span class="label-en">Date</span></td>
++                                    <td><span t-out="o.inspection_date and o.inspection_date.strftime('%Y-%m-%d') or '—'"/></td>
++                                </tr>
++                                <tr>
++                                    <td class="lbl">檢驗類型<br/><span class="label-en">Inspection Type</span></td>
++                                    <td colspan="3">
++                                        <span t-out="dict(o._fields['inspection_type'].selection).get(o.inspection_type) or '—'"/>
++                                    </td>
++                                    <td class="lbl">完成比例<br/><span class="label-en">Bulk Complete</span></td>
++                                    <td><span t-out="int(o.bulk_completion_pct or 0)"/>%</td>
++                                </tr>
++                            </table>
++
++                            <!-- ===== Legend ===== -->
++                            <div class="legend">
++                                <b>驗貨項:</b> 按訂單上的要求與合同上的要求細則 &#160;|&#160;
++                                <b>P</b> = 質量通過 / Quality Pass &#160;
++                                <b>R</b> = 輕微可立即修復 / Minor, Repairable &#160;
++                                <b>X</b> = 嚴重不可修復 / Serious, Irreparable
++                            </div>
++
++                            <!-- ===== 6 Inspection Categories ===== -->
++                            <table class="checklist">
++                                <thead>
++                                    <tr>
++                                        <th class="cat-name">檢驗類別<br/><span class="label-en">Category</span></th>
++                                        <th class="cat-items">檢驗項目 / Inspection Items</th>
++                                        <th class="cat-result">判定<br/><span class="label-en">Result</span></th>
++                                    </tr>
++                                </thead>
++                                <tbody>
++                                    <!-- Carton 紙箱檢驗 -->
++                                    <tr>
++                                        <td class="cat-name">紙箱檢驗<br/><span class="label-en">Carton</span></td>
++                                        <td class="cat-items">
++                                            <span class="chk"><span class="chk-symbol" t-out="'☑' if o.carton_check_shipping_marks else '☐'"/> 嘜頭 / Marks</span>
++                                            <span class="chk"><span class="chk-symbol" t-out="'☑' if o.carton_check_paper_quality else '☐'"/> 紙質 / Paper</span>
++                                            <span class="chk"><span class="chk-symbol" t-out="'☑' if o.carton_check_size_deviation else '☐'"/> 尺寸 / Size</span>
++                                            <span class="chk"><span class="chk-symbol" t-out="'☑' if o.carton_check_barcode else '☐'"/> 條形碼 / Barcode</span>
++                                            <span class="chk"><span class="chk-symbol" t-out="'☑' if o.carton_check_sealing else '☐'"/> 封箱 / Sealing</span>
++                                            <span class="chk"><span class="chk-symbol" t-out="'☑' if o.carton_check_appearance else '☐'"/> 外觀印刷 / Print</span>
++                                        </td>
++                                        <td t-attf-class="cat-result {{ 'pass' if o.carton_result == 'pass' else 'fail' if o.carton_result == 'fail' else 'neutral' }}">
++                                            <t t-if="o.carton_result == 'pass'">☑ 通過 / Pass</t>
++                                            <t t-elif="o.carton_result == 'fail'">☒ 不通過 / Fail</t>
++                                            <t t-else="">—</t>
++                                        </td>
++                                    </tr>
++
++                                    <!-- Packaging 包裝檢驗 -->
++                                    <tr>
++                                        <td class="cat-name">包裝檢驗<br/><span class="label-en">Packaging</span></td>
++                                        <td class="cat-items">
++                                            <span class="chk"><span class="chk-symbol" t-out="'☑' if o.packaging_check_method else '☐'"/> 包裝方法 / Method</span>
++                                            <span class="chk"><span class="chk-symbol" t-out="'☑' if o.packaging_check_protection else '☐'"/> 保護良好 / Protected</span>
++                                            <span class="chk"><span class="chk-symbol" t-out="'☑' if o.packaging_check_material else '☐'"/> 材料正確 / Material</span>
++                                            <span class="chk"><span class="chk-symbol" t-out="'☑' if o.packaging_check_color_card else '☐'"/> 彩卡正確 / Color Card</span>
++                                            <span class="chk"><span class="chk-symbol" t-out="'☑' if o.packaging_check_quantity else '☐'"/> 數量正確 / Quantity</span>
++                                        </td>
++                                        <td t-attf-class="cat-result {{ 'pass' if o.packaging_result == 'pass' else 'fail' if o.packaging_result == 'fail' else 'neutral' }}">
++                                            <t t-if="o.packaging_result == 'pass'">☑ 通過 / Pass</t>
++                                            <t t-elif="o.packaging_result == 'fail'">☒ 不通過 / Fail</t>
++                                            <t t-else="">—</t>
++                                        </td>
++                                    </tr>
++
++                                    <!-- Accessories 配件檢驗 -->
++                                    <tr>
++                                        <td class="cat-name">配件檢驗<br/><span class="label-en">Accessories</span></td>
++                                        <td class="cat-items">
++                                            <span class="chk"><span class="chk-symbol" t-out="'☑' if o.accessories_check_nameplate else '☐'"/> 銘牌 / Nameplate</span>
++                                            <span class="chk"><span class="chk-symbol" t-out="'☑' if o.accessories_check_hangtag else '☐'"/> 吊牌 / Hangtag</span>
++                                            <span class="chk"><span class="chk-symbol" t-out="'☑' if o.accessories_check_origin_label else '☐'"/> 產地標 / Origin</span>
++                                            <span class="chk"><span class="chk-symbol" t-out="'☑' if o.accessories_check_position else '☐'"/> 位置正確 / Position</span>
++                                            <span class="chk"><span class="chk-symbol" t-out="'☑' if o.accessories_check_manual else '☐'"/> 說明書 / Manual</span>
++                                            <span class="chk"><span class="chk-symbol" t-out="'☑' if o.accessories_check_accessories else '☐'"/> 配件 / Accessories</span>
++                                        </td>
++                                        <td t-attf-class="cat-result {{ 'pass' if o.accessories_result == 'pass' else 'fail' if o.accessories_result == 'fail' else 'neutral' }}">
++                                            <t t-if="o.accessories_result == 'pass'">☑ 通過 / Pass</t>
++                                            <t t-elif="o.accessories_result == 'fail'">☒ 不通過 / Fail</t>
++                                            <t t-else="">—</t>
++                                        </td>
++                                    </tr>
++
++                                    <!-- Component 分件檢測 -->
++                                    <tr>
++                                        <td class="cat-name">分件檢測<br/><span class="label-en">Component</span></td>
++                                        <td class="cat-items">
++                                            <span class="chk"><span class="chk-symbol" t-out="'☑' if o.component_check_quantity else '☐'"/> 數量 / Quantity</span>
++                                            <span class="chk"><span class="chk-symbol" t-out="'☑' if o.component_check_material else '☐'"/> 材質 / Material</span>
++                                            <span class="chk"><span class="chk-symbol" t-out="'☑' if o.component_check_dimensions else '☐'"/> 尺寸 / Dimensions</span>
++                                            <span class="chk"><span class="chk-symbol" t-out="'☑' if o.component_check_color_matching else '☐'"/> 配色 / Color</span>
++                                            <span class="chk"><span class="chk-symbol" t-out="'☑' if o.component_check_other else '☐'"/> 其他 / Other</span>
++                                        </td>
++                                        <td t-attf-class="cat-result {{ 'pass' if o.component_result == 'pass' else 'fail' if o.component_result == 'fail' else 'neutral' }}">
++                                            <t t-if="o.component_result == 'pass'">☑ 通過 / Pass</t>
++                                            <t t-elif="o.component_result == 'fail'">☒ 不通過 / Fail</t>
++                                            <t t-else="">—</t>
++                                        </td>
++                                    </tr>
++
++                                    <!-- Structural 結構檢測 -->
++                                    <tr>
++                                        <td class="cat-name">結構檢測<br/><span class="label-en">Structural</span></td>
++                                        <td class="cat-items">
++                                            <span class="chk"><span class="chk-symbol" t-out="'☑' if o.structural_check_structure else '☐'"/> 結構檢測 / Structural Test</span>
++                                            <span class="chk"><span class="chk-symbol" t-out="'☑' if o.structural_check_function else '☐'"/> 功能檢測 / Functional Test</span>
++                                        </td>
++                                        <td t-attf-class="cat-result {{ 'pass' if o.structural_result == 'pass' else 'fail' if o.structural_result == 'fail' else 'neutral' }}">
++                                            <t t-if="o.structural_result == 'pass'">☑ 通過 / Pass</t>
++                                            <t t-elif="o.structural_result == 'fail'">☒ 不通過 / Fail</t>
++                                            <t t-else="">—</t>
++                                        </td>
++                                    </tr>
++
++                                    <!-- Overall 整體檢測 -->
++                                    <tr>
++                                        <td class="cat-name">整體檢測<br/><span class="label-en">Overall</span></td>
++                                        <td class="cat-items">
++                                            <span class="chk"><span class="chk-symbol" t-out="'☑' if o.overall_check_overall else '☐'"/> 整體檢測 / Overall</span>
++                                            <span class="chk"><span class="chk-symbol" t-out="'☑' if o.overall_check_appearance else '☐'"/> 外觀檢測 / Appearance</span>
++                                        </td>
++                                        <td t-attf-class="cat-result {{ 'pass' if o.overall_result == 'pass' else 'fail' if o.overall_result == 'fail' else 'neutral' }}">
++                                            <t t-if="o.overall_result == 'pass'">☑ 通過 / Pass</t>
++                                            <t t-elif="o.overall_result == 'fail'">☒ 不通過 / Fail</t>
++                                            <t t-else="">—</t>
++                                        </td>
++                                    </tr>
++
++                                    <!-- Other / catch-all 其他檢測/備註 -->
++                                    <tr t-if="o.other_notes or o.other_result">
++                                        <td class="cat-name">其他檢測<br/><span class="label-en">Other</span></td>
++                                        <td class="cat-items">
++                                            <small><span t-out="o.other_notes or '—'"/></small>
++                                        </td>
++                                        <td t-attf-class="cat-result {{ 'pass' if o.other_result == 'pass' else 'fail' if o.other_result == 'fail' else 'neutral' }}">
++                                            <t t-if="o.other_result == 'pass'">☑ 通過 / Pass</t>
++                                            <t t-elif="o.other_result == 'fail'">☒ 不通過 / Fail</t>
++                                            <t t-else="">—</t>
++                                        </td>
++                                    </tr>
++                                </tbody>
++                            </table>
++
++                            <!-- ===== Per-SKU Detail Grid ===== -->
++                            <div t-if="o.sku_line_ids" style="margin-top: 10px;">
++                                <table class="sku-table">
++                                    <thead>
++                                        <tr>
++                                            <th>貨號<br/><span class="label-en">Item No.</span></th>
++                                            <th>描述<br/><span class="label-en">Description</span></th>
++                                            <th>訂單數量<br/><span class="label-en">Ordered</span></th>
++                                            <th>抽驗數量<br/><span class="label-en">Sampled</span></th>
++                                            <th>質量通過<br/><span class="label-en">Pass (P)</span></th>
++                                            <th>立即修復<br/><span class="label-en">Repair (R)</span></th>
++                                            <th>不可修復<br/><span class="label-en">Reject (X)</span></th>
++                                        </tr>
++                                    </thead>
++                                    <tbody>
++                                        <tr t-foreach="o.sku_line_ids" t-as="line">
++                                            <td><span t-out="line.item_code or '—'"/></td>
++                                            <td style="text-align: left;">
++                                                <span t-out="line.description or (line.product_id.display_name if line.product_id else '—')"/>
++                                            </td>
++                                            <td><span t-out="'%g' % (line.ordered_qty or 0)"/></td>
++                                            <td><span t-out="'%g' % (line.sampled_qty or 0)"/></td>
++                                            <td><span class="chk-symbol" t-out="'☑' if line.quality_pass else '☐'"/></td>
++                                            <td><span class="chk-symbol" t-out="'☑' if line.immediate_repair else '☐'"/></td>
++                                            <td><span class="chk-symbol" t-out="'☑' if line.not_repairable else '☐'"/></td>
++                                        </tr>
++                                    </tbody>
++                                </table>
++                            </div>
++
++                            <!-- ===== Comments + Notes ===== -->
++                            <div style="margin-top: 10px;">
++                                <div class="label-zh">驗貨評語/問題 <span class="label-en">Inspection Comments / Issues</span></div>
++                                <div class="text-area">
++                                    <t t-out="o.inspection_comments or '—'"/>
++                                </div>
++
++                                <div class="label-zh">備註/改進 <span class="label-en">Notes / Improvements</span></div>
++                                <div class="text-area">
++                                    <t t-out="o.improvement_notes or '—'"/>
++                                </div>
++                            </div>
++
++                            <!-- ===== Reviewer Notes (if reviewed) ===== -->
++                            <div t-if="o.merchandiser_review_notes or o.merchandiser_decision">
++                                <div class="label-zh" style="margin-top: 6px;">
++                                    商品部複核意見 <span class="label-en">Merchandiser Review Notes</span>
++                                </div>
++                                <div class="text-area">
++                                    <t t-out="o.merchandiser_review_notes or '—'"/>
++                                </div>
++                            </div>
++
++                            <!-- ===== Final Outcome bar ===== -->
++                            <div class="outcome-bar">
++                                <span class="label-zh">質量確認 / Quality Confirmation:</span>
++                                <span t-attf-class="outcome-badge outcome-{{ o.final_outcome or 'pending' }}">
++                                    <t t-if="o.final_outcome == 'pass'">通過 / PASS</t>
++                                    <t t-elif="o.final_outcome == 'rework'">返工 / REWORK</t>
++                                    <t t-elif="o.final_outcome == 'fail'">不通過 / FAIL</t>
++                                    <t t-elif="o.final_outcome == 'pending'">待定 / PENDING</t>
++                                    <t t-else="">— / NOT SET</t>
++                                </span>
++                                <span t-if="o.merchandiser_decision" style="margin-left: 14px;">
++                                    <span class="label-zh">裝運決定 / Loading Decision:</span>
++                                    <span t-attf-class="outcome-badge outcome-{{
++                                        'pass' if o.merchandiser_decision == 'load_for_shipping'
++                                        else 'fail' if o.merchandiser_decision == 'reject_load'
++                                        else 'rework' }}">
++                                        <t t-if="o.merchandiser_decision == 'load_for_shipping'">允許裝運 / LOAD FOR SHIPPING</t>
++                                        <t t-elif="o.merchandiser_decision == 'hold'">擱置 / HOLD</t>
++                                        <t t-elif="o.merchandiser_decision == 'reject_load'">拒絕裝運 / REJECT LOADING</t>
++                                    </span>
++                                </span>
++                            </div>
++
++                            <!-- ===== Signature Block ===== -->
++                            <table class="sig-table" style="margin-top: 30px;">
++                                <tr>
++                                    <td>
++                                        <div class="label-zh">工廠負責人</div>
++                                        <div class="label-en">Factory Person in Charge</div>
++                                        <div style="margin-top: 4px;"><span t-out="o.factory_contact_name or ''"/></div>
++                                    </td>
++                                    <td>
++                                        <div class="label-zh">國威公司驗貨員</div>
++                                        <div class="label-en">Courtwell Inspector</div>
++                                        <div style="margin-top: 4px;"><span t-out="o.inspector_user_id.name or ''"/></div>
++                                    </td>
++                                    <td t-if="o.merchandiser_user_id">
++                                        <div class="label-zh">商品部複核</div>
++                                        <div class="label-en">Reviewer (Merchandiser)</div>
++                                        <div style="margin-top: 4px;">
++                                            <span t-out="o.merchandiser_user_id.name or ''"/>
++                                            <t t-if="o.merchandiser_review_date">
++                                                <br/><small><span t-out="o.merchandiser_review_date.strftime('%Y-%m-%d')"/></small>
++                                            </t>
++                                        </div>
++                                    </td>
++                                    <td>
++                                        <div class="label-zh">驗貨日期</div>
++                                        <div class="label-en">Inspection Date</div>
++                                        <div style="margin-top: 4px;">
++                                            <span t-out="o.inspection_date and o.inspection_date.strftime('%Y-%m-%d') or ''"/>
++                                        </div>
++                                    </td>
++                                </tr>
++                            </table>
++
++                        </div>
++                    </div>
++                </t>
++            </t>
++        </t>
++    </template>
++
++</odoo>
+diff --git a/cw_sourcing_inspection/security/cw_sourcing_inspection_groups.xml b/cw_sourcing_inspection/security/cw_sourcing_inspection_groups.xml
+new file mode 100644
+index 0000000..71d88c9
+--- /dev/null
++++ b/cw_sourcing_inspection/security/cw_sourcing_inspection_groups.xml
+@@ -0,0 +1,59 @@
++<?xml version="1.0" encoding="utf-8"?>
++<odoo>
++    <data noupdate="0">
++
++        <!--
++            Dedicated category + privileges so the two QC groups land in
++            their own section on the Settings -> Users access-rights form
++            (rather than buried under Administration).
++        -->
++        <record id="module_category_cw_inspection" model="ir.module.category">
++            <field name="name">Quality Control</field>
++            <field name="description">Courtwell QC inspection access</field>
++            <field name="sequence">26</field>
++        </record>
++
++        <record id="privilege_qc_inspector" model="res.groups.privilege">
++            <field name="name">QC Inspector (Field)</field>
++            <field name="category_id" ref="module_category_cw_inspection"/>
++            <field name="sequence">10</field>
++        </record>
++
++        <record id="privilege_qc_reviewer" model="res.groups.privilege">
++            <field name="name">QC Reviewer (Merchandiser)</field>
++            <field name="category_id" ref="module_category_cw_inspection"/>
++            <field name="sequence">20</field>
++        </record>
++
++        <!--
++            QC Inspector — field personnel doing the inspection on a phone.
++            Sees only the "My QC Inspections" menu, and within it only
++            inspections where they are the assigned inspector.
++
++            Deliberately implies base.group_user (minimum to log in) but
++            nothing else. Admin must not also grant Sales / Purchase /
++            CRM / Project app groups to a pure-QC user, otherwise those
++            apps' menus will appear.
++        -->
++        <record id="group_qc_inspector" model="res.groups">
++            <field name="name">QC / Inspector</field>
++            <field name="privilege_id" ref="privilege_qc_inspector"/>
++            <field name="implied_ids" eval="[(4, ref('base.group_user'))]"/>
++            <field name="comment">Field QC personnel. Sees only the "My QC Inspections" menu and only their own inspection records. Submits inspections to the assigned merchandiser for same-day review. Should NOT be granted any other app access — assign this group exclusively for a locked-down QC-only login.</field>
++        </record>
++
++        <!--
++            QC Reviewer (Merchandiser) — office personnel who review
++            submitted QC inspections and decide whether to load goods
++            for shipping. Sees the full inspection form + all linkage
++            fields + the decision panel.
++        -->
++        <record id="group_qc_reviewer" model="res.groups">
++            <field name="name">QC / Reviewer</field>
++            <field name="privilege_id" ref="privilege_qc_reviewer"/>
++            <field name="implied_ids" eval="[(4, ref('base.group_user'))]"/>
++            <field name="comment">Merchandisers / managers responsible for reviewing QC inspection submissions and deciding whether the goods can be loaded for shipping. Sees all inspections assigned to them via merchandiser_user_id.</field>
++        </record>
++
++    </data>
++</odoo>
+diff --git a/cw_sourcing_inspection/security/cw_sourcing_inspection_rules.xml b/cw_sourcing_inspection/security/cw_sourcing_inspection_rules.xml
+new file mode 100644
+index 0000000..c12608e
+--- /dev/null
++++ b/cw_sourcing_inspection/security/cw_sourcing_inspection_rules.xml
+@@ -0,0 +1,43 @@
++<?xml version="1.0" encoding="utf-8"?>
++<odoo>
++    <data noupdate="0">
++
++        <!--
++            Record rules.
++
++            QC Inspector: can only see/edit inspections where they are
++            the assigned inspector_user_id. This is enforced at row
++            level so a QC user opening the model via any UI gets the
++            filtered set automatically.
++
++            QC Reviewer: can see all inspections by default (so they can
++            also act as a backup reviewer for absent merchandisers).
++            Tighten later via a domain on merchandiser_user_id if you
++            want strict per-merchandiser scoping.
++
++            System admin always has the full bypass.
++        -->
++        <record id="rule_inspection_qc_own_only" model="ir.rule">
++            <field name="name">Inspection: QC sees own inspections only</field>
++            <field name="model_id" ref="model_sourcing_inspection"/>
++            <field name="domain_force">[('inspector_user_id', '=', user.id)]</field>
++            <field name="groups" eval="[(4, ref('cw_sourcing_inspection.group_qc_inspector'))]"/>
++            <field name="perm_read" eval="True"/>
++            <field name="perm_write" eval="True"/>
++            <field name="perm_create" eval="True"/>
++            <field name="perm_unlink" eval="False"/>
++        </record>
++
++        <record id="rule_inspection_reviewer_all" model="ir.rule">
++            <field name="name">Inspection: Reviewers see all</field>
++            <field name="model_id" ref="model_sourcing_inspection"/>
++            <field name="domain_force">[(1, '=', 1)]</field>
++            <field name="groups" eval="[(4, ref('cw_sourcing_inspection.group_qc_reviewer'))]"/>
++            <field name="perm_read" eval="True"/>
++            <field name="perm_write" eval="True"/>
++            <field name="perm_create" eval="True"/>
++            <field name="perm_unlink" eval="False"/>
++        </record>
++
++    </data>
++</odoo>
+diff --git a/cw_sourcing_inspection/security/ir.model.access.csv b/cw_sourcing_inspection/security/ir.model.access.csv
+new file mode 100644
+index 0000000..e165a93
+--- /dev/null
++++ b/cw_sourcing_inspection/security/ir.model.access.csv
+@@ -0,0 +1,7 @@
++id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
++access_inspection_qc,sourcing.inspection QC inspector,model_sourcing_inspection,cw_sourcing_inspection.group_qc_inspector,1,1,1,0
++access_inspection_reviewer,sourcing.inspection reviewer,model_sourcing_inspection,cw_sourcing_inspection.group_qc_reviewer,1,1,1,0
++access_inspection_admin,sourcing.inspection admin,model_sourcing_inspection,base.group_system,1,1,1,1
++access_inspection_sku_qc,sourcing.inspection.sku.line QC,model_sourcing_inspection_sku_line,cw_sourcing_inspection.group_qc_inspector,1,1,1,1
++access_inspection_sku_reviewer,sourcing.inspection.sku.line reviewer,model_sourcing_inspection_sku_line,cw_sourcing_inspection.group_qc_reviewer,1,1,1,1
++access_inspection_sku_admin,sourcing.inspection.sku.line admin,model_sourcing_inspection_sku_line,base.group_system,1,1,1,1
+diff --git a/cw_sourcing_inspection/views/sourcing_inspection_dashboard_views.xml b/cw_sourcing_inspection/views/sourcing_inspection_dashboard_views.xml
+new file mode 100644
+index 0000000..831df4f
+--- /dev/null
++++ b/cw_sourcing_inspection/views/sourcing_inspection_dashboard_views.xml
+@@ -0,0 +1,186 @@
++<?xml version="1.0" encoding="utf-8"?>
++<odoo>
++
++    <!--
++        Dashboard / analytical views for sourcing.inspection.
++
++        These views are referenced by the actions and menu in the main
++        views file. They extend the existing actions (list + form) with
++        kanban, graph, pivot, and calendar so the QC team and managers
++        can see workload, trends, and pass rates at a glance.
++    -->
++
++    <!--
++        Kanban — useful for state-flow visibility (Draft / In Progress /
++        Submitted / Completed). Groups by state by default; cards show
++        the outcome decoration so failing/holding inspections jump out.
++    -->
++    <record id="view_sourcing_inspection_kanban" model="ir.ui.view">
++        <field name="name">sourcing.inspection.kanban</field>
++        <field name="model">sourcing.inspection</field>
++        <field name="arch" type="xml">
++            <kanban default_group_by="state"
++                    quick_create="false"
++                    sample="1">
++                <field name="name"/>
++                <field name="inspection_date"/>
++                <field name="supplier_id"/>
++                <field name="contract_number"/>
++                <field name="inspector_user_id"/>
++                <field name="merchandiser_user_id"/>
++                <field name="final_outcome"/>
++                <field name="merchandiser_decision"/>
++                <field name="is_overdue_review"/>
++                <field name="state"/>
++                <templates>
++                    <t t-name="card">
++                        <div t-attf-class="oe_kanban_card #{record.is_overdue_review.raw_value ? 'oe_kanban_color_2' : ''}">
++                            <div class="o_kanban_record_top mb8">
++                                <div class="o_kanban_record_headings">
++                                    <strong class="o_kanban_record_title">
++                                        <field name="name"/>
++                                    </strong>
++                                    <small class="o_kanban_record_subtitle text-muted">
++                                        <field name="contract_number"/>
++                                    </small>
++                                </div>
++                            </div>
++                            <div class="o_kanban_record_body">
++                                <div t-if="record.supplier_id.value">
++                                    <i class="fa fa-industry me-1"/>
++                                    <field name="supplier_id"/>
++                                </div>
++                                <div t-if="record.inspection_date.value">
++                                    <i class="fa fa-calendar me-1"/>
++                                    <field name="inspection_date"/>
++                                </div>
++                                <div t-if="record.final_outcome.raw_value"
++                                     class="mt-1">
++                                    <span t-attf-class="badge #{
++                                            record.final_outcome.raw_value === 'pass' ? 'text-bg-success' :
++                                            record.final_outcome.raw_value === 'fail' ? 'text-bg-danger' :
++                                            'text-bg-warning'}">
++                                        <field name="final_outcome"/>
++                                    </span>
++                                    <span t-if="record.merchandiser_decision.raw_value"
++                                          t-attf-class="badge ms-1 #{
++                                            record.merchandiser_decision.raw_value === 'load_for_shipping' ? 'text-bg-success' :
++                                            record.merchandiser_decision.raw_value === 'reject_load' ? 'text-bg-danger' :
++                                            'text-bg-warning'}">
++                                        <field name="merchandiser_decision"/>
++                                    </span>
++                                </div>
++                            </div>
++                            <div class="o_kanban_record_bottom">
++                                <div class="oe_kanban_bottom_left">
++                                    <small t-if="record.inspector_user_id.value">
++                                        QC: <field name="inspector_user_id"/>
++                                    </small>
++                                </div>
++                                <div class="oe_kanban_bottom_right">
++                                    <small t-if="record.is_overdue_review.raw_value"
++                                           class="text-danger">
++                                        <i class="fa fa-exclamation-triangle"/>
++                                        Overdue
++                                    </small>
++                                </div>
++                            </div>
++                        </div>
++                    </t>
++                </templates>
++            </kanban>
++        </field>
++    </record>
++
++    <!--
++        Graph view — count of inspections by month, stacked by outcome.
++        Default measure is record count; flip to inspection_cost or
++        bulk_completion_pct for cost/completion trends.
++    -->
++    <record id="view_sourcing_inspection_graph" model="ir.ui.view">
++        <field name="name">sourcing.inspection.graph</field>
++        <field name="model">sourcing.inspection</field>
++        <field name="arch" type="xml">
++            <graph string="Inspection Trends" type="bar" stacked="1">
++                <field name="inspection_date" interval="month"/>
++                <field name="final_outcome"/>
++            </graph>
++        </field>
++    </record>
++
++    <!--
++        Pivot — multi-dimensional analysis. Default rows = Supplier,
++        columns = Outcome. User can drag in Inspector, Project, Type, etc.
++    -->
++    <record id="view_sourcing_inspection_pivot" model="ir.ui.view">
++        <field name="name">sourcing.inspection.pivot</field>
++        <field name="model">sourcing.inspection</field>
++        <field name="arch" type="xml">
++            <pivot string="Inspection Analysis">
++                <field name="supplier_id" type="row"/>
++                <field name="final_outcome" type="col"/>
++                <field name="inspection_cost" type="measure"/>
++            </pivot>
++        </field>
++    </record>
++
++    <!--
++        Calendar — inspections by inspection_date. Useful for scheduling
++        and seeing the upcoming-inspection workload.
++    -->
++    <record id="view_sourcing_inspection_calendar" model="ir.ui.view">
++        <field name="name">sourcing.inspection.calendar</field>
++        <field name="model">sourcing.inspection</field>
++        <field name="arch" type="xml">
++            <calendar string="Inspection Calendar"
++                      date_start="inspection_date"
++                      color="inspector_user_id"
++                      mode="month">
++                <field name="name"/>
++                <field name="supplier_id"/>
++                <field name="final_outcome"/>
++                <field name="state"/>
++            </calendar>
++        </field>
++    </record>
++
++    <!--
++        Dashboard action — opens with all view modes (kanban + list +
++        graph + pivot + calendar + form) so users can pivot/graph their
++        way through the data without switching apps.
++
++        Default search shows last 90 days so the trend graphs are
++        meaningful from day one without flooding with historic noise.
++    -->
++    <record id="action_sourcing_inspection_dashboard" model="ir.actions.act_window">
++        <field name="name">QC Dashboard</field>
++        <field name="res_model">sourcing.inspection</field>
++        <field name="view_mode">graph,pivot,kanban,calendar,list,form</field>
++        <field name="context">{
++            'search_default_filter_state_open': 0,
++            'search_default_group_outcome': 1
++        }</field>
++        <field name="help" type="html">
++            <p class="o_view_nocontent_smiling_face">
++                No inspection data yet — once inspections start flowing
++                through, this dashboard will populate.
++            </p>
++            <p>
++                Use the graph / pivot / calendar tabs to analyze pass rates,
++                inspector workload, supplier quality history, and cost
++                trends.
++            </p>
++        </field>
++    </record>
++
++    <!--
++        Extend the existing list/form action to also expose the new
++        view modes (kanban, graph, pivot, calendar). The action_id
++        already points at views via view_mode; we re-open with all
++        modes available.
++    -->
++    <record id="action_sourcing_inspection" model="ir.actions.act_window">
++        <field name="view_mode">list,kanban,form,graph,pivot,calendar</field>
++    </record>
++
++</odoo>
+diff --git a/cw_sourcing_inspection/views/sourcing_inspection_menus.xml b/cw_sourcing_inspection/views/sourcing_inspection_menus.xml
+new file mode 100644
+index 0000000..f9c0667
+--- /dev/null
++++ b/cw_sourcing_inspection/views/sourcing_inspection_menus.xml
+@@ -0,0 +1,62 @@
++<?xml version="1.0" encoding="utf-8"?>
++<odoo>
++    <data noupdate="0">
++
++        <!--
++            Top-level "Inspections" menu. Visible to QC inspectors,
++            reviewers, and admin. A pure-QC user with no other app
++            groups will see ONLY this menu in Odoo (and only the QC
++            sub-menu below).
++        -->
++        <menuitem id="menu_root_inspections"
++                  name="Inspections"
++                  sequence="55"
++                  groups="cw_sourcing_inspection.group_qc_inspector,cw_sourcing_inspection.group_qc_reviewer,base.group_system"/>
++
++        <!--
++            QC sub-menu — opens the simplified QC form, filtered to
++            this user's own inspections. Visible to QC inspectors and
++            reviewers (reviewers may also do field work).
++        -->
++        <menuitem id="menu_inspection_my_qc"
++                  name="My QC Inspections"
++                  parent="menu_root_inspections"
++                  action="action_sourcing_inspection_qc"
++                  sequence="10"
++                  groups="cw_sourcing_inspection.group_qc_inspector,cw_sourcing_inspection.group_qc_reviewer,base.group_system"/>
++
++        <!--
++            Reviewer sub-menu — full form, filtered to inspections
++            awaiting THIS user's review. Hidden from pure QC users.
++        -->
++        <menuitem id="menu_inspection_to_review"
++                  name="Inspections to Review"
++                  parent="menu_root_inspections"
++                  action="action_sourcing_inspection_review"
++                  sequence="20"
++                  groups="cw_sourcing_inspection.group_qc_reviewer,base.group_system"/>
++
++        <!--
++            All inspections — admin / manager visibility across the
++            whole pipeline. Hidden from pure QC users.
++        -->
++        <menuitem id="menu_inspection_all"
++                  name="All Inspections"
++                  parent="menu_root_inspections"
++                  action="action_sourcing_inspection"
++                  sequence="30"
++                  groups="cw_sourcing_inspection.group_qc_reviewer,base.group_system"/>
++
++        <!--
++            QC Dashboard — graph/pivot/kanban entry point for the
++            reviewer-and-up audience. Hidden from pure QC.
++        -->
++        <menuitem id="menu_inspection_dashboard"
++                  name="QC Dashboard"
++                  parent="menu_root_inspections"
++                  action="action_sourcing_inspection_dashboard"
++                  sequence="40"
++                  groups="cw_sourcing_inspection.group_qc_reviewer,base.group_system"/>
++
++    </data>
++</odoo>
+diff --git a/cw_sourcing_inspection/views/sourcing_inspection_views.xml b/cw_sourcing_inspection/views/sourcing_inspection_views.xml
+new file mode 100644
+index 0000000..5d31ebf
+--- /dev/null
++++ b/cw_sourcing_inspection/views/sourcing_inspection_views.xml
+@@ -0,0 +1,738 @@
++<?xml version="1.0" encoding="utf-8"?>
++<odoo>
++
++    <!--
++        Form view — laid out to mirror the paper QC form's structure:
++        Header (parties + dates), then 6 inspection-category groups
++        with their sub-item booleans + per-section pass/fail, then
++        the SKU detail grid, comments, final outcome, and workflow.
++    -->
++    <record id="view_sourcing_inspection_form" model="ir.ui.view">
++        <field name="name">sourcing.inspection.form</field>
++        <field name="model">sourcing.inspection</field>
++        <field name="arch" type="xml">
++            <form string="Sourcing Inspection">
++                <header>
++                    <button name="action_schedule" type="object"
++                            string="Schedule" class="btn-secondary"
++                            invisible="state != 'draft'"/>
++                    <button name="action_start" type="object"
++                            string="Start Inspection" class="btn-primary"
++                            invisible="state not in ('draft', 'scheduled')"/>
++                    <button name="action_submit_to_merchandiser" type="object"
++                            string="Submit to Merchandiser" class="btn-primary"
++                            invisible="state not in ('draft', 'scheduled', 'in_progress')"
++                            confirm="Submit this inspection to the assigned merchandiser for same-day review? Make sure the outcome is set."/>
++                    <!-- Merchandiser decision buttons — shown only on submitted -->
++                    <button name="action_decision_load" type="object"
++                            string="Load for Shipping" class="btn-success"
++                            invisible="state != 'submitted'"
++                            groups="cw_sourcing_inspection.group_qc_reviewer"
++                            confirm="Approve loading of the inspected goods? This closes the inspection and clears it for shipping."/>
++                    <button name="action_decision_hold" type="object"
++                            string="Hold" class="btn-warning"
++                            invisible="state != 'submitted'"
++                            groups="cw_sourcing_inspection.group_qc_reviewer"
++                            confirm="Hold loading? Goods will not be cleared for shipping until further review."/>
++                    <button name="action_decision_reject" type="object"
++                            string="Reject Loading" class="btn-danger"
++                            invisible="state != 'submitted'"
++                            groups="cw_sourcing_inspection.group_qc_reviewer"
++                            confirm="Reject loading? Goods will be blocked from shipping. Add notes explaining the rejection."/>
++                    <button name="action_send_back_to_qc" type="object"
++                            string="Send Back to QC" class="btn-secondary"
++                            invisible="state != 'submitted'"
++                            groups="cw_sourcing_inspection.group_qc_reviewer"/>
++                    <!-- Admin / back-compat: legacy Complete button bypasses review -->
++                    <button name="action_complete" type="object"
++                            string="Complete (skip review)"
++                            invisible="state not in ('in_progress', 'scheduled')"
++                            groups="base.group_system"
++                            confirm="Mark completed without merchandiser review? Admins only."/>
++                    <button name="action_create_reinspection" type="object"
++                            string="Create Re-Inspection" class="btn-secondary"
++                            invisible="state != 'completed' or final_outcome not in ('fail', 'rework')"/>
++                    <button name="%(action_report_sourcing_inspection)d"
++                            type="action"
++                            string="Print QC Report (中英文)"
++                            class="btn-secondary"
++                            invisible="state == 'draft'"/>
++                    <button name="action_cancel" type="object"
++                            string="Cancel"
++                            invisible="state in ('completed', 'cancelled')"/>
++                    <button name="action_reset_to_draft" type="object"
++                            string="Reset to Draft"
++                            invisible="state != 'cancelled'"/>
++                    <field name="state" widget="statusbar"
++                           statusbar_visible="draft,scheduled,in_progress,submitted,completed"/>
++                </header>
++                <sheet>
++                    <div class="oe_button_box" name="button_box">
++                        <button name="action_view_reinspections" type="object"
++                                class="oe_stat_button" icon="fa-history"
++                                invisible="reinspection_count == 0">
++                            <field name="reinspection_count" widget="statinfo"
++                                   string="Re-Inspections"/>
++                        </button>
++                        <button name="action_view_inspection_expense"
++                                type="object"
++                                class="oe_stat_button" icon="fa-money"
++                                invisible="not inspection_expense_id">
++                            <div class="o_field_widget o_stat_info">
++                                <span class="o_stat_text">Cost</span>
++                                <span class="o_stat_value">Posted</span>
++                            </div>
++                        </button>
++                    </div>
++                    <div class="oe_title">
++                        <label for="name" string="Reference"/>
++                        <h1><field name="name" readonly="1"/></h1>
++                    </div>
++
++                    <!-- ===== Header parties + dates ===== -->
++                    <group>
++                        <group string="Inspection">
++                            <field name="inspection_type"/>
++                            <field name="contract_number"
++                                   placeholder="e.g. BC-1096"/>
++                            <field name="inspection_date"/>
++                            <field name="parent_inspection_id"
++                                   invisible="inspection_type != 'reinspect'"
++                                   options="{'no_create': True}"/>
++                        </group>
++                        <group string="Parties">
++                            <field name="supplier_id"
++                                   options="{'no_create': True}"/>
++                            <field name="factory_name"
++                                   placeholder="e.g. Zhang Laojun Lighting"/>
++                            <field name="factory_address"/>
++                            <field name="factory_contact_name"
++                                   placeholder="e.g. Li Yahui"/>
++                            <field name="inspector_user_id"/>
++                            <field name="inspector_partner_id"
++                                   options="{'no_create': True}"/>
++                        </group>
++                    </group>
++
++                    <!-- ===== Commercial linkage (reviewer-only) ===== -->
++                    <group string="Linkage" groups="cw_sourcing_inspection.group_qc_reviewer,base.group_system">
++                        <group>
++                            <field name="purchase_order_id"
++                                   options="{'no_create': True}"/>
++                            <field name="sale_order_id"
++                                   options="{'no_create': True}"/>
++                            <field name="merchandiser_user_id"
++                                   options="{'no_create': True}"/>
++                        </group>
++                        <group>
++                            <field name="project_id"
++                                   options="{'no_create': True}"/>
++                            <label for="inspection_cost"/>
++                            <div class="o_row">
++                                <field name="inspection_cost"
++                                       readonly="cost_posted"/>
++                                <button name="action_post_inspection_cost"
++                                        type="object"
++                                        string="Post Cost"
++                                        class="btn-secondary btn-sm"
++                                        invisible="cost_posted or inspection_cost &lt;= 0"
++                                        confirm="Post this inspection cost as an hr.expense against the linked project analytic account?"/>
++                                <button name="action_reset_inspection_cost"
++                                        type="object"
++                                        string="Reset Cost"
++                                        class="btn-link btn-sm"
++                                        invisible="not cost_posted"
++                                        confirm="Delete the linked expense (if still draft) and unlock the cost field?"/>
++                            </div>
++                            <field name="cost_posted" readonly="1"
++                                   widget="boolean_toggle"
++                                   invisible="not cost_posted"/>
++                            <field name="currency_id" invisible="1"/>
++                            <field name="inspection_expense_id" invisible="1"/>
++                        </group>
++                    </group>
++
++                    <!-- ===== Same-day review banner ===== -->
++                    <div class="alert alert-warning" role="alert"
++                         invisible="state != 'submitted' or not is_overdue_review">
++                        <strong>Overdue Review.</strong>
++                        QC submitted this inspection on
++                        <field name="qc_submitted_at" readonly="1" nolabel="1"/>
++                        — decide on loading today.
++                    </div>
++                    <div class="alert alert-info" role="alert"
++                         invisible="state != 'submitted' or is_overdue_review">
++                        <strong>Pending Merchandiser Review.</strong>
++                        Submitted by QC on
++                        <field name="qc_submitted_at" readonly="1" nolabel="1"/>.
++                        Reviewer:
++                        <field name="merchandiser_user_id" readonly="1" nolabel="1"/>.
++                    </div>
++
++                    <notebook>
++
++                        <!-- ===== Checklists ===== -->
++                        <page name="checklists" string="Inspection Checklists">
++
++                            <separator string="1. Carton Inspection (紙箱檢驗)"/>
++                            <group>
++                                <group>
++                                    <field name="carton_check_shipping_marks"/>
++                                    <field name="carton_check_paper_quality"/>
++                                    <field name="carton_check_size_deviation"/>
++                                </group>
++                                <group>
++                                    <field name="carton_check_barcode"/>
++                                    <field name="carton_check_sealing"/>
++                                    <field name="carton_check_appearance"/>
++                                </group>
++                            </group>
++                            <group>
++                                <field name="carton_result" widget="radio"
++                                       options="{'horizontal': true}"/>
++                            </group>
++
++                            <separator string="2. Packaging Inspection (包裝檢驗)"/>
++                            <group>
++                                <group>
++                                    <field name="packaging_check_method"/>
++                                    <field name="packaging_check_protection"/>
++                                    <field name="packaging_check_material"/>
++                                </group>
++                                <group>
++                                    <field name="packaging_check_color_card"/>
++                                    <field name="packaging_check_quantity"/>
++                                </group>
++                            </group>
++                            <group>
++                                <field name="packaging_result" widget="radio"
++                                       options="{'horizontal': true}"/>
++                            </group>
++
++                            <separator string="3. Accessories Inspection (配件檢驗)"/>
++                            <group>
++                                <group>
++                                    <field name="accessories_check_nameplate"/>
++                                    <field name="accessories_check_hangtag"/>
++                                    <field name="accessories_check_origin_label"/>
++                                </group>
++                                <group>
++                                    <field name="accessories_check_position"/>
++                                    <field name="accessories_check_manual"/>
++                                    <field name="accessories_check_accessories"/>
++                                </group>
++                            </group>
++                            <group>
++                                <field name="accessories_result" widget="radio"
++                                       options="{'horizontal': true}"/>
++                            </group>
++
++                            <separator string="4. Component Testing (分件檢測)"/>
++                            <group>
++                                <group>
++                                    <field name="component_check_quantity"/>
++                                    <field name="component_check_material"/>
++                                    <field name="component_check_dimensions"/>
++                                </group>
++                                <group>
++                                    <field name="component_check_color_matching"/>
++                                    <field name="component_check_other"/>
++                                </group>
++                            </group>
++                            <group>
++                                <field name="component_result" widget="radio"
++                                       options="{'horizontal': true}"/>
++                            </group>
++
++                            <separator string="5. Structural Testing (結構檢測)"/>
++                            <group>
++                                <group>
++                                    <field name="structural_check_structure"/>
++                                </group>
++                                <group>
++                                    <field name="structural_check_function"/>
++                                </group>
++                            </group>
++                            <group>
++                                <field name="structural_result" widget="radio"
++                                       options="{'horizontal': true}"/>
++                            </group>
++
++                            <separator string="6. Overall Inspection (整體檢測)"/>
++                            <group>
++                                <group>
++                                    <field name="overall_check_overall"/>
++                                </group>
++                                <group>
++                                    <field name="overall_check_appearance"/>
++                                </group>
++                            </group>
++                            <group>
++                                <field name="overall_result" widget="radio"
++                                       options="{'horizontal': true}"/>
++                            </group>
++
++                            <separator string="Other Inspection / Notes"/>
++                            <group>
++                                <field name="other_notes" nolabel="1"/>
++                                <field name="other_result" widget="radio"
++                                       options="{'horizontal': true}"/>
++                            </group>
++                        </page>
++
++                        <!-- ===== Per-SKU detail grid ===== -->
++                        <page name="sku_lines" string="SKU Detail Grid">
++                            <field name="sku_line_ids">
++                                <list editable="bottom">
++                                    <field name="sequence" widget="handle"/>
++                                    <field name="item_code"/>
++                                    <field name="product_id"
++                                           options="{'no_create': True}"
++                                           optional="show"/>
++                                    <field name="description" optional="show"/>
++                                    <field name="ordered_qty"/>
++                                    <field name="sampled_qty"/>
++                                    <field name="quality_pass"
++                                           widget="boolean_toggle"/>
++                                    <field name="immediate_repair"
++                                           widget="boolean_toggle"/>
++                                    <field name="not_repairable"
++                                           widget="boolean_toggle"/>
++                                    <field name="notes" optional="hide"/>
++                                </list>
++                            </field>
++                        </page>
++
++                        <!-- ===== Comments + outcome ===== -->
++                        <page name="comments" string="Comments &amp; Outcome">
++                            <separator string="Inspection Comments / Issues"/>
++                            <field name="inspection_comments" nolabel="1"
++                                   placeholder="Free text: findings, measured-vs-spec deltas, anything not captured in the checklists."/>
++
++                            <separator string="Improvement Notes"/>
++                            <field name="improvement_notes" nolabel="1"
++                                   placeholder="Free text: recommended actions, follow-ups, lessons for next batch."/>
++
++                            <separator string="Final Outcome (QC)"/>
++                            <group>
++                                <group>
++                                    <field name="final_outcome" widget="radio"
++                                           options="{'horizontal': true}"/>
++                                </group>
++                                <group>
++                                    <field name="bulk_completion_pct"
++                                           widget="percentage"/>
++                                </group>
++                            </group>
++                        </page>
++
++                        <!-- ===== Photos (phone-captured) ===== -->
++                        <page name="photos" string="Photos">
++                            <field name="inspection_photo_ids"
++                                   widget="many2many_binary"
++                                   string="Inspection Photos"/>
++                            <div class="text-muted">
++                                <p>Tap the paperclip / "+" button on the mobile app to capture photos directly from the phone camera, or pick existing photos from the gallery. Multiple uploads supported.</p>
++                            </div>
++                        </page>
++
++                        <!-- ===== Merchandiser Review (reviewer-only) ===== -->
++                        <page name="merchandiser_review"
++                              string="Merchandiser Review"
++                              groups="cw_sourcing_inspection.group_qc_reviewer,base.group_system">
++                            <group>
++                                <group string="Decision">
++                                    <field name="merchandiser_decision"
++                                           widget="radio"
++                                           readonly="state != 'submitted'"/>
++                                    <field name="merchandiser_review_date"
++                                           readonly="1"/>
++                                    <field name="is_overdue_review"
++                                           readonly="1"
++                                           widget="boolean_toggle"
++                                           invisible="state != 'submitted'"/>
++                                </group>
++                                <group string="QC Submission">
++                                    <field name="qc_submitted_at" readonly="1"/>
++                                    <field name="inspector_user_id" readonly="1"/>
++                                </group>
++                            </group>
++                            <separator string="Reviewer Notes"/>
++                            <field name="merchandiser_review_notes" nolabel="1"
++                                   placeholder="Comments for QC, justification for hold/reject, or any context for the loading decision."/>
++                        </page>
++
++                    </notebook>
++                </sheet>
++                <chatter/>
++            </form>
++        </field>
++    </record>
++
++    <!--
++        QC-simplified form variant — designed for phone use by field QC.
++        Strips out PO/SO/project/cost/merchandiser-decision fields.
++        Photos tab leads (prominent for camera capture). Submit button
++        is the single primary action.
++
++        Selected via the "My QC Inspections" action below, which has
++        view_id pointing to this view.
++    -->
++    <record id="view_sourcing_inspection_form_qc" model="ir.ui.view">
++        <field name="name">sourcing.inspection.form.qc</field>
++        <field name="model">sourcing.inspection</field>
++        <field name="priority">99</field>
++        <field name="arch" type="xml">
++            <form string="QC Inspection">
++                <header>
++                    <button name="action_start" type="object"
++                            string="Start" class="btn-primary"
++                            invisible="state not in ('draft', 'scheduled')"/>
++                    <button name="action_submit_to_merchandiser"
++                            type="object"
++                            string="Submit to Merchandiser"
++                            class="btn-primary"
++                            invisible="state not in ('draft', 'scheduled', 'in_progress')"
++                            confirm="Submit this inspection? Once submitted you can't edit it without it being sent back by the merchandiser."/>
++                    <field name="state" widget="statusbar"
++                           statusbar_visible="draft,in_progress,submitted,completed"/>
++                </header>
++                <sheet>
++                    <div class="oe_title">
++                        <label for="name" string="Reference"/>
++                        <h1><field name="name" readonly="1"/></h1>
++                    </div>
++
++                    <group>
++                        <group>
++                            <field name="inspection_type"/>
++                            <field name="contract_number"
++                                   placeholder="e.g. BC-1096"/>
++                            <field name="inspection_date"/>
++                        </group>
++                        <group>
++                            <field name="supplier_id"
++                                   options="{'no_create': True}"/>
++                            <field name="factory_name"/>
++                            <field name="factory_contact_name"
++                                   placeholder="Factory person in charge"/>
++                            <field name="inspector_user_id" readonly="1"/>
++                        </group>
++                    </group>
++
++                    <notebook>
++                        <!-- Photos first — primary action on phone -->
++                        <page name="qc_photos" string="Photos">
++                            <field name="inspection_photo_ids"
++                                   widget="many2many_binary"
++                                   string="Inspection Photos"/>
++                            <div class="text-muted">
++                                <p>Tap the paperclip / "+" button to capture photos directly from the camera. Take as many as you need.</p>
++                            </div>
++                        </page>
++
++                        <!-- Checklists -->
++                        <page name="qc_checklists" string="Checklists">
++
++                            <separator string="1. Carton Inspection"/>
++                            <group>
++                                <group>
++                                    <field name="carton_check_shipping_marks"/>
++                                    <field name="carton_check_paper_quality"/>
++                                    <field name="carton_check_size_deviation"/>
++                                </group>
++                                <group>
++                                    <field name="carton_check_barcode"/>
++                                    <field name="carton_check_sealing"/>
++                                    <field name="carton_check_appearance"/>
++                                </group>
++                            </group>
++                            <field name="carton_result" widget="radio"
++                                   options="{'horizontal': true}"/>
++
++                            <separator string="2. Packaging Inspection"/>
++                            <group>
++                                <group>
++                                    <field name="packaging_check_method"/>
++                                    <field name="packaging_check_protection"/>
++                                    <field name="packaging_check_material"/>
++                                </group>
++                                <group>
++                                    <field name="packaging_check_color_card"/>
++                                    <field name="packaging_check_quantity"/>
++                                </group>
++                            </group>
++                            <field name="packaging_result" widget="radio"
++                                   options="{'horizontal': true}"/>
++
++                            <separator string="3. Accessories Inspection"/>
++                            <group>
++                                <group>
++                                    <field name="accessories_check_nameplate"/>
++                                    <field name="accessories_check_hangtag"/>
++                                    <field name="accessories_check_origin_label"/>
++                                </group>
++                                <group>
++                                    <field name="accessories_check_position"/>
++                                    <field name="accessories_check_manual"/>
++                                    <field name="accessories_check_accessories"/>
++                                </group>
++                            </group>
++                            <field name="accessories_result" widget="radio"
++                                   options="{'horizontal': true}"/>
++
++                            <separator string="4. Component Testing"/>
++                            <group>
++                                <group>
++                                    <field name="component_check_quantity"/>
++                                    <field name="component_check_material"/>
++                                    <field name="component_check_dimensions"/>
++                                </group>
++                                <group>
++                                    <field name="component_check_color_matching"/>
++                                    <field name="component_check_other"/>
++                                </group>
++                            </group>
++                            <field name="component_result" widget="radio"
++                                   options="{'horizontal': true}"/>
++
++                            <separator string="5. Structural Testing"/>
++                            <group>
++                                <group>
++                                    <field name="structural_check_structure"/>
++                                </group>
++                                <group>
++                                    <field name="structural_check_function"/>
++                                </group>
++                            </group>
++                            <field name="structural_result" widget="radio"
++                                   options="{'horizontal': true}"/>
++
++                            <separator string="6. Overall Inspection"/>
++                            <group>
++                                <group>
++                                    <field name="overall_check_overall"/>
++                                </group>
++                                <group>
++                                    <field name="overall_check_appearance"/>
++                                </group>
++                            </group>
++                            <field name="overall_result" widget="radio"
++                                   options="{'horizontal': true}"/>
++
++                            <separator string="Other / Notes"/>
++                            <field name="other_notes" nolabel="1"/>
++                            <field name="other_result" widget="radio"
++                                   options="{'horizontal': true}"/>
++                        </page>
++
++                        <!-- Per-SKU grid -->
++                        <page name="qc_sku" string="SKU Detail">
++                            <field name="sku_line_ids">
++                                <list editable="bottom">
++                                    <field name="sequence" widget="handle"/>
++                                    <field name="item_code"/>
++                                    <field name="description"/>
++                                    <field name="ordered_qty"/>
++                                    <field name="sampled_qty"/>
++                                    <field name="quality_pass"
++                                           widget="boolean_toggle"/>
++                                    <field name="immediate_repair"
++                                           widget="boolean_toggle"/>
++                                    <field name="not_repairable"
++                                           widget="boolean_toggle"/>
++                                </list>
++                            </field>
++                        </page>
++
++                        <!-- Comments + outcome -->
++                        <page name="qc_comments" string="Comments &amp; Outcome">
++                            <separator string="Issues / Findings"/>
++                            <field name="inspection_comments" nolabel="1"
++                                   placeholder="What did you find? Measurement deltas, defects, anything not in the checklists."/>
++                            <separator string="Improvement Notes"/>
++                            <field name="improvement_notes" nolabel="1"
++                                   placeholder="Recommended actions, follow-ups."/>
++                            <separator string="Final Outcome"/>
++                            <group>
++                                <group>
++                                    <field name="final_outcome" widget="radio"
++                                           options="{'horizontal': true}"/>
++                                </group>
++                                <group>
++                                    <field name="bulk_completion_pct"
++                                           widget="percentage"/>
++                                </group>
++                            </group>
++                        </page>
++                    </notebook>
++                </sheet>
++                <chatter/>
++            </form>
++        </field>
++    </record>
++
++    <!--
++        List view — shows date, type, supplier, contract, project,
++        final outcome, state. Outcome decorated for quick visual scan.
++    -->
++    <record id="view_sourcing_inspection_list" model="ir.ui.view">
++        <field name="name">sourcing.inspection.list</field>
++        <field name="model">sourcing.inspection</field>
++        <field name="arch" type="xml">
++            <list string="Inspections"
++                  decoration-success="final_outcome == 'pass'"
++                  decoration-warning="final_outcome == 'rework' or final_outcome == 'pending'"
++                  decoration-danger="final_outcome == 'fail' or is_overdue_review"
++                  decoration-bf="state == 'submitted'">
++                <field name="name"/>
++                <field name="inspection_date"/>
++                <field name="inspection_type"/>
++                <field name="contract_number"/>
++                <field name="supplier_id"/>
++                <field name="factory_name" optional="hide"/>
++                <field name="project_id" optional="show"/>
++                <field name="inspector_user_id"/>
++                <field name="merchandiser_user_id" optional="show"/>
++                <field name="final_outcome"/>
++                <field name="merchandiser_decision" optional="show"/>
++                <field name="qc_submitted_at" optional="hide"/>
++                <field name="bulk_completion_pct" widget="percentage" optional="hide"/>
++                <field name="is_overdue_review" invisible="1"/>
++                <field name="state"/>
++            </list>
++        </field>
++    </record>
++
++    <!--
++        Search + filters + group-by
++    -->
++    <record id="view_sourcing_inspection_search" model="ir.ui.view">
++        <field name="name">sourcing.inspection.search</field>
++        <field name="model">sourcing.inspection</field>
++        <field name="arch" type="xml">
++            <search string="Inspections">
++                <field name="name"/>
++                <field name="contract_number"/>
++                <field name="supplier_id"/>
++                <field name="project_id"/>
++                <field name="inspector_user_id"/>
++                <field name="inspection_date"/>
++                <separator/>
++                <filter name="filter_pass" string="Pass"
++                        domain="[('final_outcome', '=', 'pass')]"/>
++                <filter name="filter_rework" string="Rework"
++                        domain="[('final_outcome', '=', 'rework')]"/>
++                <filter name="filter_fail" string="Fail"
++                        domain="[('final_outcome', '=', 'fail')]"/>
++                <filter name="filter_pending" string="Pending"
++                        domain="[('final_outcome', '=', 'pending')]"/>
++                <separator/>
++                <filter name="filter_state_open"
++                        string="Open (not Completed/Cancelled)"
++                        domain="[('state', 'not in', ['completed', 'cancelled'])]"/>
++                <filter name="filter_state_completed" string="Completed"
++                        domain="[('state', '=', 'completed')]"/>
++                <separator/>
++                <filter name="filter_my_qc" string="My QC Inspections"
++                        domain="[('inspector_user_id', '=', uid)]"/>
++                <filter name="filter_my_reviews" string="To Review (Me)"
++                        domain="[('merchandiser_user_id', '=', uid),
++                                 ('state', '=', 'submitted')]"/>
++                <filter name="filter_overdue" string="Overdue Reviews"
++                        domain="[('is_overdue_review', '=', True)]"/>
++                <filter name="filter_submitted" string="All Submitted (any reviewer)"
++                        domain="[('state', '=', 'submitted')]"/>
++                <separator/>
++                <filter name="group_supplier" string="Supplier"
++                        context="{'group_by': 'supplier_id'}"/>
++                <filter name="group_project" string="Project"
++                        context="{'group_by': 'project_id'}"/>
++                <filter name="group_outcome" string="Outcome"
++                        context="{'group_by': 'final_outcome'}"/>
++                <filter name="group_type" string="Type"
++                        context="{'group_by': 'inspection_type'}"/>
++                <filter name="group_inspector" string="Inspector"
++                        context="{'group_by': 'inspector_user_id'}"/>
++                <filter name="group_state" string="State"
++                        context="{'group_by': 'state'}"/>
++            </search>
++        </field>
++    </record>
++
++    <!--
++        Window action
++    -->
++    <record id="action_sourcing_inspection" model="ir.actions.act_window">
++        <field name="name">All Inspections</field>
++        <field name="res_model">sourcing.inspection</field>
++        <field name="view_mode">list,form</field>
++        <field name="context">{'search_default_filter_state_open': 1}</field>
++        <field name="help" type="html">
++            <p class="o_view_nocontent_smiling_face">
++                Record your first inspection.
++            </p>
++            <p>
++                Pre-shipment, DUPRO, factory audit, loading supervision,
++                or lab-test inspections — replaces the paper QC form
++                with structured data linkable to your projects and POs.
++            </p>
++        </field>
++    </record>
++
++    <!--
++        QC-Inspector action — opens the SIMPLIFIED QC form by default
++        (view_id pinned), filters to only this user's assigned
++        inspections, and defaults the inspector on create.
++    -->
++    <record id="action_sourcing_inspection_qc" model="ir.actions.act_window">
++        <field name="name">My QC Inspections</field>
++        <field name="res_model">sourcing.inspection</field>
++        <field name="view_mode">list,form</field>
++        <field name="view_id" ref="view_sourcing_inspection_list"/>
++        <field name="context">{
++            'search_default_filter_my_qc': 1,
++            'default_inspector_user_id': uid,
++            'form_view_ref': 'cw_sourcing_inspection.view_sourcing_inspection_form_qc',
++        }</field>
++        <field name="domain">[('inspector_user_id', '=', uid)]</field>
++        <field name="help" type="html">
++            <p class="o_view_nocontent_smiling_face">
++                No inspections assigned to you yet.
++            </p>
++            <p>
++                When a merchandiser assigns you a new inspection it
++                appears here. Open it on your phone, fill in the
++                checklists, take photos with the camera, set the
++                outcome, and Submit to the Merchandiser.
++            </p>
++        </field>
++    </record>
++
++    <!--
++        Reviewer action — opens the FULL form, filtered to inspections
++        assigned to this user that are awaiting their review.
++    -->
++    <record id="action_sourcing_inspection_review" model="ir.actions.act_window">
++        <field name="name">Inspections to Review</field>
++        <field name="res_model">sourcing.inspection</field>
++        <field name="view_mode">list,form</field>
++        <field name="context">{
++            'search_default_filter_my_reviews': 1,
++            'search_default_filter_overdue': 0,
++        }</field>
++        <field name="domain">[('merchandiser_user_id', '=', uid)]</field>
++        <field name="help" type="html">
++            <p class="o_view_nocontent_smiling_face">
++                No inspections waiting for your review.
++            </p>
++            <p>
++                When QC submits an inspection assigned to you, it shows
++                up here with a same-day activity. Review it and set the
++                Loading Decision: <b>Load for Shipping</b>, <b>Hold</b>,
++                or <b>Reject Loading</b>.
++            </p>
++        </field>
++    </record>
++
++</odoo>
+-- 
+2.34.1
+

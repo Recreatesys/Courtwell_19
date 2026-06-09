@@ -1,0 +1,111 @@
+From 71fc3f41961e1607a26fec509e2a7aaf214c7eaf Mon Sep 17 00:00:00 2001
+From: cwintlhk <howardcheng@courtwell.com.hk>
+Date: Mon, 8 Jun 2026 12:03:08 +0200
+Subject: [PATCH 14/14] cw_debrand 19.0.1.0.1: clear noupdate on stock sale
+ templates
+
+The stock sale module seeds email_template_edi_sale and friends inside
+a <data noupdate="1"> block. That flag persists on ir_model_data and
+silently blocks ALL future XML-driven writes to body_html, including
+overrides from other modules. This left cw_debrand 19.0.1.0.0 with
+its body_html stuck at first-install state on every subsequent
+upgrade.
+
+Adds:
+* pre_init_hook _cw_debrand_clear_template_noupdate (fresh installs)
+* migrations/19.0.1.0.1/pre-migration.py (upgrades)
+
+Both clear the noupdate flag on email_template_edi_sale,
+email_template_proforma, and mail_template_sale_confirmation BEFORE
+cw_debrand data files load, so our body_html override actually takes
+effect.
+
+Verified on CW19_Test: S00053 now renders without merchandiser block,
+falling through to user signature as intended.
+---
+ cw_debrand/__init__.py                        | 25 +++++++++++++++++++
+ cw_debrand/__manifest__.py                    |  3 ++-
+ .../migrations/19.0.1.0.1/pre-migration.py    | 23 +++++++++++++++++
+ 3 files changed, 50 insertions(+), 1 deletion(-)
+ create mode 100644 cw_debrand/migrations/19.0.1.0.1/pre-migration.py
+
+diff --git a/cw_debrand/__init__.py b/cw_debrand/__init__.py
+index e69de29..5587f23 100644
+--- a/cw_debrand/__init__.py
++++ b/cw_debrand/__init__.py
+@@ -0,0 +1,25 @@
++def _cw_debrand_clear_template_noupdate(env):
++    """Clear noupdate=True on the stock sale email template ir_model_data
++    rows so cw_debrand's data file (and any future override) can write
++    body_html on install AND on upgrade.
++
++    Stock seeds these inside <data noupdate="1"> blocks. That flag
++    persists on ir_model_data and silently blocks ALL future writes
++    via the XML data loader, no matter which module is doing the
++    writing. Clearing it once unblocks every subsequent module-data
++    refresh of these templates.
++
++    Wired as pre_init_hook (fresh install) + migration script
++    (upgrade) so the unblock happens BEFORE cw_debrand's own data
++    files load.
++    """
++    env.cr.execute("""
++        UPDATE ir_model_data
++        SET noupdate = false
++        WHERE module = 'sale'
++          AND name IN (
++              'email_template_edi_sale',
++              'email_template_proforma',
++              'mail_template_sale_confirmation'
++          )
++    """)
+diff --git a/cw_debrand/__manifest__.py b/cw_debrand/__manifest__.py
+index 18c8bef..3e53e8f 100644
+--- a/cw_debrand/__manifest__.py
++++ b/cw_debrand/__manifest__.py
+@@ -1,6 +1,6 @@
+ {
+     'name': "CW Debrand & Quotation Email Cleanup",
+-    'version': '19.0.1.0.0',
++    'version': '19.0.1.0.1',
+     'category': 'Tools',
+     'summary': "Strips Odoo branding from website, portal, emails, and "
+                "backend; replaces the portal link in quotation emails with "
+@@ -61,4 +61,5 @@ Notes
+     'installable': True,
+     'application': False,
+     'auto_install': False,
++    'pre_init_hook': '_cw_debrand_clear_template_noupdate',
+ }
+diff --git a/cw_debrand/migrations/19.0.1.0.1/pre-migration.py b/cw_debrand/migrations/19.0.1.0.1/pre-migration.py
+new file mode 100644
+index 0000000..e4d0942
+--- /dev/null
++++ b/cw_debrand/migrations/19.0.1.0.1/pre-migration.py
+@@ -0,0 +1,23 @@
++"""Pre-migration for 19.0.1.0.1.
++
++Runs BEFORE cw_debrand's data files re-load during a module upgrade
++that crosses this version boundary. Clears the noupdate flag on the
++stock sale email template ir_model_data rows so our body_html override
++actually writes when the data file is processed afterwards.
++
++Same logic as the pre_init_hook in __init__.py; duplicated here because
++hooks only fire on fresh install, not on upgrades.
++"""
++
++
++def migrate(cr, version):
++    cr.execute("""
++        UPDATE ir_model_data
++        SET noupdate = false
++        WHERE module = 'sale'
++          AND name IN (
++              'email_template_edi_sale',
++              'email_template_proforma',
++              'mail_template_sale_confirmation'
++          )
++    """)
+-- 
+2.34.1
+

@@ -1,0 +1,367 @@
+From 26c591b127f152f9517ec373873c2422fc8438ba Mon Sep 17 00:00:00 2001
+From: cwintlhk <howardcheng@courtwell.com.hk>
+Date: Mon, 8 Jun 2026 11:45:48 +0200
+Subject: [PATCH 11/14] Add cw_shipment_inspection_gate: block shipment past
+ Booked until QC cleared
+
+---
+ cw_shipment_inspection_gate/__init__.py       |   1 +
+ cw_shipment_inspection_gate/__manifest__.py   |  47 +++++
+ .../models/__init__.py                        |   1 +
+ .../models/cw_shipment.py                     | 199 ++++++++++++++++++
+ .../views/cw_shipment_views.xml               |  67 ++++++
+ 5 files changed, 315 insertions(+)
+ create mode 100644 cw_shipment_inspection_gate/__init__.py
+ create mode 100644 cw_shipment_inspection_gate/__manifest__.py
+ create mode 100644 cw_shipment_inspection_gate/models/__init__.py
+ create mode 100644 cw_shipment_inspection_gate/models/cw_shipment.py
+ create mode 100644 cw_shipment_inspection_gate/views/cw_shipment_views.xml
+
+diff --git a/cw_shipment_inspection_gate/__init__.py b/cw_shipment_inspection_gate/__init__.py
+new file mode 100644
+index 0000000..0650744
+--- /dev/null
++++ b/cw_shipment_inspection_gate/__init__.py
+@@ -0,0 +1 @@
++from . import models
+diff --git a/cw_shipment_inspection_gate/__manifest__.py b/cw_shipment_inspection_gate/__manifest__.py
+new file mode 100644
+index 0000000..2b5fe9b
+--- /dev/null
++++ b/cw_shipment_inspection_gate/__manifest__.py
+@@ -0,0 +1,47 @@
++{
++    'name': "CW Shipment Inspection Gate",
++    'version': '19.0.1.0.0',
++    'category': 'Inventory/Purchase',
++    'summary': "Block cw.shipment from progressing past Booked unless "
++               "every linked inspection has been cleared for loading "
++               "by the merchandiser.",
++    'description': """
++Courtwell — Shipment / Inspection Gate
++======================================
++
++Bridge module connecting cw_sourcing_inspection to cw_shipment.
++
++Behaviour
++---------
++* Resolves the set of inspections linked to a shipment by walking
++  cw.shipment.sale_order_id and cw.shipment.container_ids.sale_order_id
++  back to sourcing.inspection.sale_order_id.
++* Adds an inspection_ids computed field + inspection-status banner +
++  smart-button count on the shipment form.
++* On status transition past 'booked' (shipped / arrived / delivered),
++  raises UserError if any linked inspection is not in
++  merchandiser_decision == 'load_for_shipping'.
++
++The check only fires when there ARE linked inspections. Shipments
++without any inspections (e.g. legacy data or simple deliveries) pass
++through unchanged.
++
++GM bypass: members of base.group_system can force a transition by
++setting context key 'bypass_inspection_gate=True' on the write call.
++""",
++    'author': 'Courtwell Internal',
++    'website': 'https://courtwell.com.hk',
++    'depends': [
++        'base',
++        'mail',
++        'cw_shipment',
++        'cw_sourcing_inspection',
++    ],
++    'data': [
++        'views/cw_shipment_views.xml',
++    ],
++    'license': 'LGPL-3',
++    'installable': True,
++    'application': False,
++    'auto_install': False,
++}
+diff --git a/cw_shipment_inspection_gate/models/__init__.py b/cw_shipment_inspection_gate/models/__init__.py
+new file mode 100644
+index 0000000..877ae97
+--- /dev/null
++++ b/cw_shipment_inspection_gate/models/__init__.py
+@@ -0,0 +1 @@
++from . import cw_shipment
+diff --git a/cw_shipment_inspection_gate/models/cw_shipment.py b/cw_shipment_inspection_gate/models/cw_shipment.py
+new file mode 100644
+index 0000000..7663efe
+--- /dev/null
++++ b/cw_shipment_inspection_gate/models/cw_shipment.py
+@@ -0,0 +1,199 @@
++from odoo import _, api, fields, models
++from odoo.exceptions import UserError
++
++
++# Statuses that represent "goods physically leaving" or "post-load".
++# The gate fires when transitioning INTO any of these from a pre-load
++# state. Tightening point: if cw_shipment evolves its statusbar, update
++# this set rather than hunting through write() code.
++POST_LOAD_STATUSES = ('shipped', 'arrived', 'delivered')
++
++
++class CwShipment(models.Model):
++    _inherit = 'cw.shipment'
++
++    # ------------------------------------------------------------------
++    # Linked inspections — resolved through sale.order linkage.
++    # Computed-stored so it can drive smart-button counts and the
++    # banner without per-render search overhead.
++    # ------------------------------------------------------------------
++    # NOTE: not stored. A stored compute would go stale because the
++    # natural Odoo invalidation watches THIS record's fields, not the
++    # related sourcing.inspection model's create/write events. Recompute
++    # on every read is cheap (single SQL) and always correct — the gate
++    # check is correctness-critical so we choose fresh over fast.
++    inspection_ids = fields.Many2many(
++        'sourcing.inspection',
++        compute='_compute_inspection_ids',
++        store=False,
++        string='Linked Inspections',
++        help='Inspections that share a sale order with this shipment '
++             '(either the shipment\'s own sale_order_id, or any of its '
++             'containers\' sale_order_ids in consolidation scenarios).',
++    )
++    inspection_count = fields.Integer(
++        string='Inspections',
++        compute='_compute_inspection_aggregates',
++        store=False,
++    )
++    inspections_cleared_count = fields.Integer(
++        string='Cleared for Loading',
++        compute='_compute_inspection_aggregates',
++        store=False,
++    )
++    inspections_blocking_count = fields.Integer(
++        string='Blocking Loading',
++        compute='_compute_inspection_aggregates',
++        store=False,
++        help='Inspections that exist but are NOT cleared for loading '
++             '(Hold / Reject / awaiting reviewer decision / still in '
++             'draft or in_progress).',
++    )
++    inspection_gate_state = fields.Selection(
++        [
++            ('no_inspections',  'No Inspections'),
++            ('all_cleared',     'All Cleared for Loading'),
++            ('partial_cleared', 'Partially Cleared (Mixed)'),
++            ('blocked',         'Blocked — Inspections Pending or Rejected'),
++        ],
++        string='Inspection Gate',
++        compute='_compute_inspection_aggregates',
++        store=False,
++        help='Summary of whether linked inspections allow this shipment '
++             'to advance past Booked.',
++    )
++
++    # ------------------------------------------------------------------
++    # Computes
++    # ------------------------------------------------------------------
++    @api.depends(
++        'sale_order_id',
++        'container_ids.sale_order_id',
++    )
++    def _compute_inspection_ids(self):
++        Inspection = self.env['sourcing.inspection']
++        for ship in self:
++            so_ids = set()
++            if ship.sale_order_id:
++                so_ids.add(ship.sale_order_id.id)
++            for c in ship.container_ids:
++                if c.sale_order_id:
++                    so_ids.add(c.sale_order_id.id)
++            if so_ids:
++                ship.inspection_ids = Inspection.search([
++                    ('sale_order_id', 'in', list(so_ids)),
++                ])
++            else:
++                ship.inspection_ids = [(5, 0, 0)]  # clear
++
++    # NOTE: dependency on inspection_ids only, NOT on its nested fields.
++    # Walking inspection_ids.merchandiser_decision causes Odoo's
++    # dependency-trigger system to try a reverse-side SQL search on a
++    # non-stored M2M, which fails. The aggregates run on form-open
++    # against whatever inspection_ids resolves to at that moment, and
++    # the gate check uses _resolve_linked_inspections() at write-time
++    # for a fresh read independent of the form cache.
++    @api.depends('inspection_ids')
++    def _compute_inspection_aggregates(self):
++        for ship in self:
++            insps = ship.inspection_ids
++            n = len(insps)
++            cleared = insps.filtered(
++                lambda i: i.merchandiser_decision == 'load_for_shipping'
++            )
++            blocking = insps - cleared
++            ship.inspection_count = n
++            ship.inspections_cleared_count = len(cleared)
++            ship.inspections_blocking_count = len(blocking)
++            if n == 0:
++                ship.inspection_gate_state = 'no_inspections'
++            elif not blocking:
++                ship.inspection_gate_state = 'all_cleared'
++            elif cleared:
++                ship.inspection_gate_state = 'partial_cleared'
++            else:
++                ship.inspection_gate_state = 'blocked'
++
++    # ------------------------------------------------------------------
++    # Gate enforcement
++    # ------------------------------------------------------------------
++    def write(self, vals):
++        # Only check when status is changing AND new value is post-load
++        if 'status' in vals and vals['status'] in POST_LOAD_STATUSES:
++            bypass = self.env.context.get('bypass_inspection_gate')
++            if not bypass:
++                for ship in self:
++                    ship._check_inspection_gate(target_status=vals['status'])
++        return super().write(vals)
++
++    def _resolve_linked_inspections(self):
++        """Direct search for inspections linked to this shipment.
++        Used by the write-time gate so it doesn't rely on the
++        recordset's possibly-stale compute cache."""
++        self.ensure_one()
++        Inspection = self.env['sourcing.inspection']
++        so_ids = set()
++        if self.sale_order_id:
++            so_ids.add(self.sale_order_id.id)
++        for c in self.container_ids:
++            if c.sale_order_id:
++                so_ids.add(c.sale_order_id.id)
++        if not so_ids:
++            return Inspection.browse()
++        return Inspection.search([('sale_order_id', 'in', list(so_ids))])
++
++    def _check_inspection_gate(self, target_status):
++        """Raise UserError if any linked inspection is not cleared for
++        loading. Skipped silently when there are no linked inspections."""
++        self.ensure_one()
++        inspections = self._resolve_linked_inspections()
++        blocking = inspections.filtered(
++            lambda i: i.merchandiser_decision != 'load_for_shipping'
++        )
++        if not blocking:
++            return
++        # Build a useful error message listing the offending inspections
++        lines = []
++        for insp in blocking[:10]:  # cap at 10 for readability
++            if insp.merchandiser_decision:
++                reason = dict(
++                    insp._fields['merchandiser_decision'].selection,
++                ).get(insp.merchandiser_decision)
++            elif insp.state == 'submitted':
++                reason = _('awaiting merchandiser review')
++            else:
++                reason = _('not yet submitted to merchandiser')
++            lines.append(
++                f"  • {insp.name} ({insp.supplier_id.name or '?'}): {reason}"
++            )
++        extra = ''
++        if len(blocking) > 10:
++            extra = _("\n  … and %d more.") % (len(blocking) - 10)
++        raise UserError(_(
++            "Cannot advance shipment %(ship)s to '%(target)s': "
++            "%(n)d linked inspection(s) are not cleared for loading.\n"
++            "\n%(lines)s%(extra)s\n\n"
++            "Either:\n"
++            "  • Have the merchandiser set the loading decision to "
++            "'Load for Shipping' on each blocking inspection, OR\n"
++            "  • An Admin can bypass this gate by passing the context "
++            "key bypass_inspection_gate=True.",
++            ship=self.display_name,
++            target=target_status,
++            n=len(blocking),
++            lines='\n'.join(lines),
++            extra=extra,
++        ))
++
++    # ------------------------------------------------------------------
++    # Convenience action — view the linked inspections in a list
++    # ------------------------------------------------------------------
++    def action_view_linked_inspections(self):
++        self.ensure_one()
++        return {
++            'type': 'ir.actions.act_window',
++            'name': _('Inspections for %s', self.display_name),
++            'res_model': 'sourcing.inspection',
++            'view_mode': 'list,form',
++            'domain': [('id', 'in', self.inspection_ids.ids)],
++        }
+diff --git a/cw_shipment_inspection_gate/views/cw_shipment_views.xml b/cw_shipment_inspection_gate/views/cw_shipment_views.xml
+new file mode 100644
+index 0000000..768f439
+--- /dev/null
++++ b/cw_shipment_inspection_gate/views/cw_shipment_views.xml
+@@ -0,0 +1,67 @@
++<?xml version="1.0" encoding="utf-8"?>
++<odoo>
++
++    <!--
++        Extend the cw.shipment form with:
++          1. A coloured banner showing the inspection-gate state
++          2. A smart button to view all linked inspections
++    -->
++    <record id="view_cw_shipment_form_inspection_gate" model="ir.ui.view">
++        <field name="name">cw.shipment.form.inspection.gate</field>
++        <field name="model">cw.shipment</field>
++        <field name="inherit_id" ref="cw_shipment.view_cw_shipment_form"/>
++        <field name="arch" type="xml">
++
++            <!-- Smart button: linked inspections + cleared/blocking badge -->
++            <xpath expr="//sheet" position="inside">
++                <div class="oe_button_box" name="inspection_gate_button_box">
++                    <button name="action_view_linked_inspections"
++                            type="object"
++                            class="oe_stat_button" icon="fa-check-square-o"
++                            invisible="inspection_count == 0">
++                        <div class="o_field_widget o_stat_info">
++                            <span class="o_stat_text">Inspections</span>
++                            <span class="o_stat_value">
++                                <field name="inspections_cleared_count"/>
++                                /
++                                <field name="inspection_count"/>
++                            </span>
++                        </div>
++                    </button>
++                </div>
++            </xpath>
++
++            <!-- Banner: blocked / partial / all cleared -->
++            <xpath expr="//sheet" position="before">
++                <div class="alert alert-danger" role="alert"
++                     invisible="inspection_gate_state != 'blocked'">
++                    <strong>Loading Blocked.</strong>
++                    <field name="inspections_blocking_count" readonly="1" nolabel="1"/>
++                    linked inspection(s) are not cleared for loading. This shipment
++                    cannot advance past <i>Booked</i> until each is approved with
++                    <i>Load for Shipping</i>.
++                </div>
++                <div class="alert alert-warning" role="alert"
++                     invisible="inspection_gate_state != 'partial_cleared'">
++                    <strong>Partially Cleared.</strong>
++                    <field name="inspections_cleared_count" readonly="1" nolabel="1"/>
++                    of <field name="inspection_count" readonly="1" nolabel="1"/>
++                    linked inspections are cleared.
++                    <field name="inspections_blocking_count" readonly="1" nolabel="1"/>
++                    still blocking — shipment cannot advance past <i>Booked</i> yet.
++                </div>
++                <div class="alert alert-success" role="alert"
++                     invisible="inspection_gate_state != 'all_cleared'">
++                    <strong>All Inspections Cleared.</strong>
++                    Shipment may advance to <i>Shipped</i>.
++                </div>
++                <field name="inspection_gate_state" invisible="1"/>
++                <field name="inspection_count" invisible="1"/>
++                <field name="inspections_cleared_count" invisible="1"/>
++                <field name="inspections_blocking_count" invisible="1"/>
++            </xpath>
++
++        </field>
++    </record>
++
++</odoo>
+-- 
+2.34.1
+

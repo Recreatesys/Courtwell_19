@@ -1,0 +1,348 @@
+From e422a7ee4664020d9da66f80b22dcebdc5c0b278 Mon Sep 17 00:00:00 2001
+From: cwintlhk <howardcheng@courtwell.com.hk>
+Date: Mon, 8 Jun 2026 11:11:12 +0200
+Subject: [PATCH 01/14] sourcing_reference: collapse Sourcing into Quotation
+ pipeline stage (19.0.1.1.0)
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The pipeline is simplified from 9 stages to 8 — the standalone Sourcing
+stage has been removed, and Quotation now covers both the merchandiser's
+internal RFQ work and outbound client quoting. Reference-ID generation
+moves from Incoming-Inquiry-exit to Quotation-entry to match.
+
+  * data/crm_stage_data.xml — remove crm_stage_sourcing, renumber rest
+  * hooks.py — drop sourcing entry from stage adoption + cleanup maps
+  * models/crm_lead.py — rename _is_sourcing_stage to _is_quotation_stage,
+    reroute the ID generator trigger
+  * models/project_project.py — fix fallback SO lookup to use
+    order_line.project_id and gate behind 'sale_order_id' in vals
+  * migrations/19.0.1.1.0/ — schema/data migration to drop Sourcing stage
+---
+ sourcing_reference/__manifest__.py            |   6 +-
+ sourcing_reference/data/crm_stage_data.xml    |  21 ++--
+ sourcing_reference/hooks.py                   |   2 -
+ .../migrations/19.0.1.1.0/post-migration.py   | 111 ++++++++++++++++++
+ sourcing_reference/models/crm_lead.py         |  15 +--
+ sourcing_reference/models/project_project.py  |   6 +-
+ 6 files changed, 130 insertions(+), 31 deletions(-)
+ create mode 100644 sourcing_reference/migrations/19.0.1.1.0/post-migration.py
+
+diff --git a/sourcing_reference/__manifest__.py b/sourcing_reference/__manifest__.py
+index b3e1eb2..d672dd0 100644
+--- a/sourcing_reference/__manifest__.py
++++ b/sourcing_reference/__manifest__.py
+@@ -1,6 +1,6 @@
+ {
+     'name': 'CW Sourcing Reference IDs',
+-    'version': '19.0.1.0.0',
++    'version': '19.0.1.1.0',
+     'summary': 'Auto-generated client/supplier reference IDs, sequence counters, '
+                'CRM pipeline stages, and propagation across SO/PO/Project',
+     'description': """
+@@ -9,12 +9,12 @@ Phase 1 — Reference ID Architecture for the boutique sourcing firm.
+ Implements the spec from §2 and §12.1:
+   * sourcing.client.sequence  — cumulative counter per (client, GS1 segment)
+   * sourcing.supplier.sequence — cumulative counter per (province, GS1 segment)
+-  * crm.lead generator: OP-{ClientCode}-{Segment}-{YY}-{NNN} on Incoming Inquiry exit
++  * crm.lead generator: OP-{ClientCode}-{Segment}-{YY}-{NNN} on entry to Quotation stage
+   * sale.order propagation: QP-... (read from lead)
+   * purchase.order generator/propagation: RQ-{Province}-{Segment}-{YY}-{NNN}, flips to PO- on confirm
+   * project.project Phase 3 hook (stub field PR-... — populated in Phase 3)
+   * Client Contact smart button — Orders (non-Lost opportunity count)
+-  * 9 CRM pipeline stages (Incoming Inquiry, Sourcing, Quotation, Proforma Invoice,
++  * 8 CRM pipeline stages (Incoming Inquiry, Quotation, Proforma Invoice,
+     QC, Enroute, Upsell/Reorder, Lost, On Hold)
+ 
+ Models sourcing.client.sequence and sourcing.supplier.sequence were originally
+diff --git a/sourcing_reference/data/crm_stage_data.xml b/sourcing_reference/data/crm_stage_data.xml
+index adf7a0c..eae9d0b 100644
+--- a/sourcing_reference/data/crm_stage_data.xml
++++ b/sourcing_reference/data/crm_stage_data.xml
+@@ -8,58 +8,51 @@
+         <field name="is_won" eval="False"/>
+     </record>
+ 
+-    <record id="crm_stage_sourcing" model="crm.stage">
+-        <field name="name">Sourcing</field>
+-        <field name="sequence">2</field>
+-        <field name="fold" eval="False"/>
+-        <field name="is_won" eval="False"/>
+-    </record>
+-
+     <record id="crm_stage_quotation" model="crm.stage">
+         <field name="name">Quotation</field>
+-        <field name="sequence">3</field>
++        <field name="sequence">2</field>
+         <field name="fold" eval="False"/>
+         <field name="is_won" eval="False"/>
+     </record>
+ 
+     <record id="crm_stage_proforma_invoice" model="crm.stage">
+         <field name="name">Proforma Invoice</field>
+-        <field name="sequence">4</field>
++        <field name="sequence">3</field>
+         <field name="fold" eval="False"/>
+         <field name="is_won" eval="False"/>
+     </record>
+ 
+     <record id="crm_stage_qc" model="crm.stage">
+         <field name="name">QC</field>
+-        <field name="sequence">5</field>
++        <field name="sequence">4</field>
+         <field name="fold" eval="False"/>
+         <field name="is_won" eval="False"/>
+     </record>
+ 
+     <record id="crm_stage_enroute" model="crm.stage">
+         <field name="name">Enroute</field>
+-        <field name="sequence">6</field>
++        <field name="sequence">5</field>
+         <field name="fold" eval="False"/>
+         <field name="is_won" eval="False"/>
+     </record>
+ 
+     <record id="crm_stage_upsell_reorder" model="crm.stage">
+         <field name="name">Upsell/Reorder</field>
+-        <field name="sequence">7</field>
++        <field name="sequence">6</field>
+         <field name="fold" eval="False"/>
+         <field name="is_won" eval="True"/>
+     </record>
+ 
+     <record id="crm_stage_lost" model="crm.stage">
+         <field name="name">Lost</field>
+-        <field name="sequence">8</field>
++        <field name="sequence">7</field>
+         <field name="fold" eval="True"/>
+         <field name="is_won" eval="False"/>
+     </record>
+ 
+     <record id="crm_stage_on_hold" model="crm.stage">
+         <field name="name">On Hold</field>
+-        <field name="sequence">9</field>
++        <field name="sequence">8</field>
+         <field name="fold" eval="True"/>
+         <field name="is_won" eval="False"/>
+     </record>
+diff --git a/sourcing_reference/hooks.py b/sourcing_reference/hooks.py
+index 15ca37b..bce4dfd 100644
+--- a/sourcing_reference/hooks.py
++++ b/sourcing_reference/hooks.py
+@@ -13,7 +13,6 @@ _logger = logging.getLogger(__name__)
+ # 'Archived' is intentionally renamed to 'On Hold' to match the spec.
+ NAME_TO_XMLID = {
+     'incoming inquiry': 'crm_stage_incoming_inquiry',
+-    'sourcing': 'crm_stage_sourcing',
+     'quotation': 'crm_stage_quotation',
+     'quotation sent': 'crm_stage_quotation',
+     'proforma invoice': 'crm_stage_proforma_invoice',
+@@ -87,7 +86,6 @@ def post_init_hook(env):
+     # Build name → our_stage map
+     our_xmlids = {
+         'crm_stage_incoming_inquiry',
+-        'crm_stage_sourcing',
+         'crm_stage_quotation',
+         'crm_stage_proforma_invoice',
+         'crm_stage_qc',
+diff --git a/sourcing_reference/migrations/19.0.1.1.0/post-migration.py b/sourcing_reference/migrations/19.0.1.1.0/post-migration.py
+new file mode 100644
+index 0000000..85c5651
+--- /dev/null
++++ b/sourcing_reference/migrations/19.0.1.1.0/post-migration.py
+@@ -0,0 +1,111 @@
++"""
++Post-migration for 19.0.1.0.0 → 19.0.1.1.0
++
++The reference-ID auto-generation trigger has moved from the `Sourcing` stage
++to the `Quotation` stage. The `Sourcing` stage is being retired.
++
++This script:
++  1. Re-points any crm.lead currently sitting at Sourcing → Quotation.
++     Existing `sourcing_reference` values are preserved (the generation
++     function is idempotent; we also bypass it with skip_sourcing_validation).
++  2. Removes the `Sourcing` crm.stage record and its ir_model_data mapping.
++
++If the Sourcing stage cannot be removed (e.g. because some other module
++references it that we don't know about), we log a warning and leave it in
++place — the user can delete it manually.
++"""
++import logging
++
++_logger = logging.getLogger(__name__)
++
++
++def migrate(cr, version):
++    if not version:
++        return
++
++    # --- locate Sourcing + Quotation stages --------------------------------
++    cr.execute("""
++        SELECT res_id FROM ir_model_data
++        WHERE module = 'sourcing_reference' AND name = 'crm_stage_sourcing'
++    """)
++    row = cr.fetchone()
++    sourcing_id = row[0] if row else None
++
++    cr.execute("""
++        SELECT res_id FROM ir_model_data
++        WHERE module = 'sourcing_reference' AND name = 'crm_stage_quotation'
++    """)
++    row = cr.fetchone()
++    quotation_id = row[0] if row else None
++
++    if not sourcing_id:
++        # Stage may have been adopted from a pre-existing record under a
++        # different xml_id, or already removed. Fall back to name-based lookup.
++        cr.execute(
++            "SELECT id FROM crm_stage WHERE name->>'en_US' = 'Sourcing' LIMIT 1"
++        )
++        row = cr.fetchone()
++        sourcing_id = row[0] if row else None
++
++    if not quotation_id:
++        cr.execute(
++            "SELECT id FROM crm_stage WHERE name->>'en_US' = 'Quotation' LIMIT 1"
++        )
++        row = cr.fetchone()
++        quotation_id = row[0] if row else None
++
++    if not sourcing_id:
++        _logger.info(
++            "sourcing_reference migration 19.0.1.1.0: no Sourcing stage found, nothing to do."
++        )
++        return
++
++    if not quotation_id:
++        _logger.warning(
++            "sourcing_reference migration 19.0.1.1.0: Sourcing stage exists but "
++            "Quotation stage not found. Cannot reroute leads; leaving Sourcing "
++            "in place."
++        )
++        return
++
++    # --- move leads ---------------------------------------------------------
++    cr.execute(
++        "UPDATE crm_lead SET stage_id = %s WHERE stage_id = %s",
++        (quotation_id, sourcing_id),
++    )
++    moved = cr.rowcount
++    _logger.info(
++        "sourcing_reference migration 19.0.1.1.0: moved %d leads from Sourcing → Quotation.",
++        moved,
++    )
++
++    # --- drop xml_id mapping then the stage row ----------------------------
++    cr.execute(
++        "DELETE FROM ir_model_data "
++        "WHERE module = 'sourcing_reference' AND name = 'crm_stage_sourcing'"
++    )
++
++    # Check for FK references from any other table before deleting.
++    cr.execute("""
++        SELECT 1 FROM crm_lead WHERE stage_id = %s LIMIT 1
++    """, (sourcing_id,))
++    if cr.fetchone():
++        _logger.warning(
++            "sourcing_reference migration 19.0.1.1.0: stage %s still referenced "
++            "after move — leaving it in place to avoid FK violation.",
++            sourcing_id,
++        )
++        return
++
++    try:
++        cr.execute("DELETE FROM crm_stage WHERE id = %s", (sourcing_id,))
++        _logger.info(
++            "sourcing_reference migration 19.0.1.1.0: removed Sourcing stage id=%s.",
++            sourcing_id,
++        )
++    except Exception as exc:  # noqa: BLE001
++        _logger.warning(
++            "sourcing_reference migration 19.0.1.1.0: could not delete stage %s: %s. "
++            "You can remove it manually via CRM → Configuration → Pipeline Stages.",
++            sourcing_id, exc,
++        )
+diff --git a/sourcing_reference/models/crm_lead.py b/sourcing_reference/models/crm_lead.py
+index 46f6be4..5cd300b 100644
+--- a/sourcing_reference/models/crm_lead.py
++++ b/sourcing_reference/models/crm_lead.py
+@@ -18,7 +18,7 @@ class CrmLead(models.Model):
+         tracking=True,
+         help='Auto-generated immutable reference ID. Format: '
+              'OP-{ClientCode}-{SegmentCode}-{YY}-{NNN}. '
+-             'Generated on first entry to the Sourcing stage.',
++             'Generated on first entry to the Quotation stage.',
+     )
+ 
+     gpc_segment_id = fields.Many2one(
+@@ -60,13 +60,13 @@ class CrmLead(models.Model):
+             return True
+         return (stage.name or '').strip().lower() == 'incoming inquiry'
+ 
+-    def _is_sourcing_stage(self, stage):
++    def _is_quotation_stage(self, stage):
+         if not stage:
+             return False
+-        target = self.env.ref('sourcing_reference.crm_stage_sourcing', raise_if_not_found=False)
++        target = self.env.ref('sourcing_reference.crm_stage_quotation', raise_if_not_found=False)
+         if target and stage.id == target.id:
+             return True
+-        return (stage.name or '').strip().lower() == 'sourcing'
++        return (stage.name or '').strip().lower() == 'quotation'
+ 
+     def _is_lost_stage(self, stage):
+         if not stage:
+@@ -93,7 +93,7 @@ class CrmLead(models.Model):
+             ))
+ 
+     def _generate_sourcing_reference(self):
+-        """Generate OP-{cc}-{seg}-{YY}-{NNN} on entry to Sourcing.
++        """Generate OP-{cc}-{seg}-{YY}-{NNN} on entry to Quotation.
+ 
+         Idempotent: if a reference already exists, returns silently.
+         Concurrency-safe: uses a SELECT ... FOR UPDATE row lock on the
+@@ -145,18 +145,15 @@ class CrmLead(models.Model):
+                     continue
+                 from_inquiry = self._is_incoming_inquiry_stage(old_stage)
+                 to_lost = self._is_lost_stage(new_stage)
+-                to_sourcing = self._is_sourcing_stage(new_stage)
+                 if from_inquiry and not to_lost:
+                     lead._validate_inquiry_exit()
+-                if to_sourcing and not lead.sourcing_reference:
+-                    pass
+ 
+         result = super().write(vals)
+ 
+         if 'stage_id' in vals and not self.env.context.get('skip_sourcing_validation'):
+             for lead in self:
+                 if (
+-                    self._is_sourcing_stage(lead.stage_id)
++                    self._is_quotation_stage(lead.stage_id)
+                     and not lead.sourcing_reference
+                     and lead.partner_id
+                     and lead.gpc_segment_id
+diff --git a/sourcing_reference/models/project_project.py b/sourcing_reference/models/project_project.py
+index c347b77..3705e65 100644
+--- a/sourcing_reference/models/project_project.py
++++ b/sourcing_reference/models/project_project.py
+@@ -18,13 +18,13 @@ class ProjectProject(models.Model):
+     @api.model_create_multi
+     def create(self, vals_list):
+         projects = super().create(vals_list)
+-        for project in projects:
++        for project, vals in zip(projects, vals_list):
+             if project.sourcing_reference:
+                 continue
+             so = project.sale_order_id if 'sale_order_id' in project._fields else False
+-            if not so:
++            if not so and 'sale_order_id' in vals:
+                 so = self.env['sale.order'].search(
+-                    [('project_ids', 'in', project.id)], limit=1
++                    [('order_line.project_id', '=', project.id)], limit=1
+                 )
+             if so and so.sourcing_reference:
+                 base = so.sourcing_reference.strip()
+-- 
+2.34.1
+

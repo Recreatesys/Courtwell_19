@@ -1,0 +1,434 @@
+From 7eb901b1654a8dc403a2af25ae77cecd2490d382 Mon Sep 17 00:00:00 2001
+From: cwintlhk <howardcheng@courtwell.com.hk>
+Date: Mon, 8 Jun 2026 11:45:47 +0200
+Subject: [PATCH 04/14] Add cw_debrand: strip Odoo branding from frontend,
+ portal, and email
+
+---
+ cw_debrand/__init__.py                        |   0
+ cw_debrand/__manifest__.py                    |  64 ++++++++++
+ cw_debrand/data/mail_template_sale.xml        |  66 +++++++++++
+ cw_debrand/views/mail_notification_layout.xml | 112 ++++++++++++++++++
+ cw_debrand/views/portal_layout.xml            |  23 ++++
+ cw_debrand/views/web_layout.xml               |  33 ++++++
+ cw_debrand/views/web_login.xml                |  20 ++++
+ cw_debrand/views/website_layout.xml           |  43 +++++++
+ 8 files changed, 361 insertions(+)
+ create mode 100644 cw_debrand/__init__.py
+ create mode 100644 cw_debrand/__manifest__.py
+ create mode 100644 cw_debrand/data/mail_template_sale.xml
+ create mode 100644 cw_debrand/views/mail_notification_layout.xml
+ create mode 100644 cw_debrand/views/portal_layout.xml
+ create mode 100644 cw_debrand/views/web_layout.xml
+ create mode 100644 cw_debrand/views/web_login.xml
+ create mode 100644 cw_debrand/views/website_layout.xml
+
+diff --git a/cw_debrand/__init__.py b/cw_debrand/__init__.py
+new file mode 100644
+index 0000000..e69de29
+diff --git a/cw_debrand/__manifest__.py b/cw_debrand/__manifest__.py
+new file mode 100644
+index 0000000..18c8bef
+--- /dev/null
++++ b/cw_debrand/__manifest__.py
+@@ -0,0 +1,64 @@
++{
++    'name': "CW Debrand & Quotation Email Cleanup",
++    'version': '19.0.1.0.0',
++    'category': 'Tools',
++    'summary': "Strips Odoo branding from website, portal, emails, and "
++               "backend; replaces the portal link in quotation emails with "
++               "the assigned merchandiser's contact details.",
++    'description': """
++Courtwell — Debrand & Quotation Email Cleanup
++=============================================
++
++This module is the single point of truth for client-facing branding
++overrides on the Courtwell Odoo deployment.
++
++Quotation email
++---------------
++* Overrides ``sale.email_template_edi_sale`` (the template used by the
++  "Send by email" button on a quotation) to remove the customer-portal
++  "View Quotation" CTA block.
++* Replaces it with a block that surfaces the assigned merchandiser
++  (sale.order.user_id) — name, email, direct phone — so the client
++  has a real human to reply to instead of a self-service link.
++
++Branding removed
++----------------
++* Website (frontend): "Powered by Odoo" footer copyright, favicon,
++  login screen "Odoo" wordmark and tagline.
++* Customer portal (/my/*): "Powered by Odoo" footer.
++* Outbound mail layouts (``mail.mail_notification_layout`` and the
++  light variant): Odoo logo, "Sent by Odoo" footer.
++* Backend: login page brand strings, browser tab title default.
++
++Notes
++-----
++* Favicon ships as a placeholder PNG; replace
++  ``static/src/img/favicon.png`` with the real Courtwell favicon
++  before installing in prod.
++* No data model changes. Module is idempotent and safely uninstallable
++  (reverts to stock Odoo branding on uninstall).
++""",
++    'author': 'Courtwell Internal',
++    'website': 'https://courtwell.com.hk',
++    'depends': [
++        'base',
++        'web',
++        'mail',
++        'sale',
++        'sale_management',
++        'portal',
++        'website',
++    ],
++    'data': [
++        'data/mail_template_sale.xml',
++        'views/mail_notification_layout.xml',
++        'views/website_layout.xml',
++        'views/portal_layout.xml',
++        'views/web_login.xml',
++        'views/web_layout.xml',
++    ],
++    'license': 'LGPL-3',
++    'installable': True,
++    'application': False,
++    'auto_install': False,
++}
+diff --git a/cw_debrand/data/mail_template_sale.xml b/cw_debrand/data/mail_template_sale.xml
+new file mode 100644
+index 0000000..0bb58f1
+--- /dev/null
++++ b/cw_debrand/data/mail_template_sale.xml
+@@ -0,0 +1,66 @@
++<?xml version="1.0" encoding="utf-8"?>
++<odoo>
++    <!--
++        Override of sale.email_template_edi_sale.
++
++        Stock template lives in `sale/data/mail_template_data.xml` inside
++        a <data noupdate="1"> block — that means stock body_html only
++        seeds on first install of `sale` and won't overwrite changes on
++        upgrade. Our override does NOT set noupdate, so every upgrade of
++        cw_debrand re-asserts our body (an admin who edits the template
++        in the UI gets reset on next module upgrade — by design).
++
++        The "View Quotation" portal CTA does NOT live in this template
++        body — it's injected by mail.mail_notification_layout via the
++        `has_button_access` flag. We disable that in
++        views/mail_notification_layout.xml.
++
++        Body content: structurally identical to stock except we drop
++        the "Do not hesitate to contact us" line and direct the
++        client to reply to the email — the merchandiser's contact
++        details come through via their Odoo user signature, which
++        the stock template already renders at the bottom.
++    -->
++    <record id="sale.email_template_edi_sale" model="mail.template" forcecreate="False">
++        <field name="subject">{{ object.company_id.name }} {{ object.state in ('draft', 'sent') and 'Quotation' or 'Order' }} (Ref {{ object.name or 'n/a' }})</field>
++        <field name="body_html" type="html">
++<div style="margin: 0px; padding: 0px;">
++    <p style="margin: 0px; padding: 0px; font-size: 13px;">
++        <t t-set="doc_name" t-value="'quotation' if object.state in ('draft', 'sent') else 'order'"/>
++        Hello,
++        <br/><br/>
++        Your <t t-out="doc_name or ''">quotation</t> <span style="font-weight: bold;" t-out="object.name or ''"></span>
++        <t t-if="object.origin">
++            (with reference: <t t-out="object.origin or ''">S00052</t> )
++        </t>
++        amounting in <span style="font-weight: bold;" t-out="format_amount(object.amount_total, object.currency_id) or ''">$ 10.00</span> is ready for your review.
++        <br/>
++        <t t-set="documents" t-value="object._get_product_documents()"/>
++        <t t-if="documents">
++            <br/>
++            <t t-if="len(documents)>1">
++                Here are some additional documents that may interest you:
++            </t>
++            <t t-else="">
++                Here is an additional document that may interest you:
++            </t>
++            <ul style="margin-bottom: 0;">
++                <t t-foreach="documents" t-as="document">
++                    <li style="font-size: 13px;">
++                        <a t-out="document.ir_attachment_id.name"
++                            t-att-href="object.get_portal_url('/document/' + str(document.id))"
++                            t-att-target="target"/>
++                    </li>
++                </t>
++            </ul>
++        </t>
++        <br/>
++        Please reply directly to this email with any questions or to confirm this <t t-out="doc_name or ''">quotation</t>.
++        <t t-if="not is_html_empty(object.user_id.signature)">
++            <div style="margin-top: 12px;">--<br/><t t-out="object.user_id.signature or ''">Mitchell Admin</t></div>
++        </t>
++    </p>
++</div>
++        </field>
++    </record>
++</odoo>
+diff --git a/cw_debrand/views/mail_notification_layout.xml b/cw_debrand/views/mail_notification_layout.xml
+new file mode 100644
+index 0000000..e7134d5
+--- /dev/null
++++ b/cw_debrand/views/mail_notification_layout.xml
+@@ -0,0 +1,112 @@
++<?xml version="1.0" encoding="utf-8"?>
++<odoo>
++    <!--
++        Outbound email layout debrand.
++
++        Two stock layouts are used by every email Odoo sends:
++          * mail.mail_notification_layout  - the default
++          * mail.mail_notification_light   - the lighter card-style
++            variant (used by some res.partner notifications and the
++            sale "Send by email" flow when light layout is selected)
++
++        We do two things to each:
++          1. Force has_button_access to False at the top of the layout
++             so the portal "View Quotation" / "View Order" CTA block
++             never renders. This removes the courtwell.com.hk portal
++             link from EVERY outbound mail, not just sale quotations.
++             That matches the user's intent ("any links sent out
++             externally") and is much simpler than per-model branching.
++          2. Replace the "Powered by Odoo" footer paragraph with empty
++             content.
++
++        We use t-set on has_button_access (rather than xpath-deleting
++        each `<td t-if="has_button_access">` block) because t-set is a
++        single insertion that fails closed: if a future Odoo release
++        renames the variable, our t-set still runs, the button still
++        renders, but the layout still works. XPath-deleting individual
++        td cells is more brittle.
++    -->
++
++    <!-- 1. mail.mail_notification_layout -->
++    <template id="cw_mail_notification_layout_debrand"
++              inherit_id="mail.mail_notification_layout"
++              name="CW Debrand: kill portal CTA + 'Powered by Odoo' in default mail layout">
++        <!--
++            Insert t-set as the FIRST child of <body>. We can't easily
++            xpath the bare <t t-set="subtype_internal" ...> line
++            inside the template's bare-element top, so target body
++            element and prepend. Odoo's QWeb evaluates t-set in order,
++            so a later t-set inside the template would override us —
++            stock template doesn't do that for has_button_access,
++            so we're safe.
++        -->
++        <xpath expr="//body/t[@t-set='subtype_internal']" position="before">
++            <!--
++                Force-disable portal CTA. With has_button_access=False
++                every `t-if="has_button_access"` and `show_header`
++                conditional in the rest of the template flips closed,
++                so the entire access-button cell, the microdata block,
++                and the spacer cell all skip rendering. Side effect:
++                the whole header (including subtitle row) skips for
++                typical emails where email_notification_force_header
++                is False - acceptable, the body still carries the
++                record name inline.
++            -->
++            <t t-set="has_button_access" t-value="False"/>
++        </xpath>
++
++        <!--
++            Strip "Powered by Odoo" footer block.
++
++            Constraint: mail.mail_notification_invite (a primary-
++            inherit child) does `<xpath expr="//span[@id='mail_unfollow']"
++            position="replace"/>` against the resolved parent. If we
++            delete the wrapper outright, that span vanishes and the
++            child's xpath errors out at upgrade time.
++
++            Solution: replace the wrapper with a stripped-down version
++            that retains the same wrapper element + an empty
++            <span id="mail_unfollow"> as an anchor for the child
++            xpaths. Body of the span is empty so no Unfollow link
++            renders (mail_mail.py's _UNFOLLOW_REGEX rewrites this
++            span per-recipient anyway).
++        -->
++        <xpath expr="//div[@t-if='show_footer'][.//a[contains(@href, 'odoo.com')]]" position="replace">
++            <div t-if="show_footer" style="color: #555555; font-size:11px;">
++                <span t-if="show_unfollow" id="mail_unfollow">
++                    <a href="/mail/unfollow" style="text-decoration:none; color:#555555;">Unfollow</a>
++                </span>
++            </div>
++        </xpath>
++    </template>
++
++    <!-- 2. mail.mail_notification_light -->
++    <template id="cw_mail_notification_light_debrand"
++              inherit_id="mail.mail_notification_light"
++              name="CW Debrand: kill portal CTA + 'Powered by Odoo' in light mail layout">
++        <!--
++            Same has_button_access kill. The light layout sets
++            subtype_internal first too, so we anchor on that.
++        -->
++        <xpath expr="//body/t[@t-set='subtype_internal']" position="before">
++            <t t-set="has_button_access" t-value="False"/>
++        </xpath>
++
++        <!--
++            Strip "Powered by Odoo" footer row. Same constraint as
++            above: preserve <span id="mail_unfollow"> inside so any
++            child template xpaths against it still resolve. The light
++            layout puts this row at the bottom <tr><td align="center"
++            ...>; we replace the <tr> with a debranded version.
++        -->
++        <xpath expr="//tr[.//a[contains(@href, 'odoo.com')]]" position="replace">
++            <tr>
++                <td align="center" style="min-width: 590px;">
++                    <span t-if="show_unfollow" id="mail_unfollow">
++                        <a href="/mail/unfollow" style="text-decoration:none; color:#555555;">Unfollow</a>
++                    </span>
++                </td>
++            </tr>
++        </xpath>
++    </template>
++</odoo>
+diff --git a/cw_debrand/views/portal_layout.xml b/cw_debrand/views/portal_layout.xml
+new file mode 100644
+index 0000000..7d8c0f4
+--- /dev/null
++++ b/cw_debrand/views/portal_layout.xml
+@@ -0,0 +1,23 @@
++<?xml version="1.0" encoding="utf-8"?>
++<odoo>
++    <!--
++        Customer portal debrand.
++
++        portal.portal_record_sidebar (portal/views/portal_templates.xml
++        ~line 280) renders a "Powered by Odoo" line below the sidebar
++        content on portal record pages (/my/orders/N, /my/invoices/N
++        etc.). It's a plain <div class="d-none d-lg-block mt-5 small
++        text-center text-muted"> containing the attribution link.
++
++        We strip it. Identify the div by its odoo.com link (the
++        wrapping div has only utility classes shared with many other
++        elements, so anchor on the unique inner href).
++    -->
++    <template id="cw_portal_record_sidebar_debrand"
++              inherit_id="portal.portal_record_sidebar"
++              name="CW Debrand: remove 'Powered by Odoo' from portal sidebar">
++        <xpath expr="//div[.//a[contains(@href, 'odoo.com')]]" position="replace">
++            <!-- removed: 'Powered by Odoo' line under sidebar content -->
++        </xpath>
++    </template>
++</odoo>
+diff --git a/cw_debrand/views/web_layout.xml b/cw_debrand/views/web_layout.xml
+new file mode 100644
+index 0000000..0607fd0
+--- /dev/null
++++ b/cw_debrand/views/web_layout.xml
+@@ -0,0 +1,33 @@
++<?xml version="1.0" encoding="utf-8"?>
++<odoo>
++    <!--
++        web.layout (web/views/webclient_templates.xml line ~17) is the
++        root HTML wrapper used by every Odoo page (backend, website,
++        portal, login). Two debrand targets here:
++
++          1. <title t-esc="title or 'Odoo'"/> - default browser tab
++             title when no specific title is supplied. Swap fallback
++             from 'Odoo' to 'Courtwell'.
++
++          2. <link rel="shortcut icon"
++                   t-att-href="x_icon or '/web/static/img/favicon.ico'"/>
++             Default favicon path. When the website module is
++             installed (always true here), website.favicon binary
++             field is the canonical favicon slot. Setting the
++             fallback to /web/image/website/1/favicon means: upload
++             ONE favicon via Settings > Websites > Favicon and every
++             surface (backend, login, portal, website) picks it up.
++             Until something is uploaded, /web/image returns Odoo's
++             placeholder image (a generic icon) - acceptable.
++    -->
++    <template id="cw_web_layout_debrand"
++              inherit_id="web.layout"
++              name="CW Debrand: replace default title 'Odoo' and favicon">
++        <xpath expr="//title" position="replace">
++            <title t-esc="title or 'Courtwell'"/>
++        </xpath>
++        <xpath expr="//link[@rel='shortcut icon']" position="attributes">
++            <attribute name="t-att-href">x_icon or '/web/image/website/1/favicon'</attribute>
++        </xpath>
++    </template>
++</odoo>
+diff --git a/cw_debrand/views/web_login.xml b/cw_debrand/views/web_login.xml
+new file mode 100644
+index 0000000..78545c7
+--- /dev/null
++++ b/cw_debrand/views/web_login.xml
+@@ -0,0 +1,20 @@
++<?xml version="1.0" encoding="utf-8"?>
++<odoo>
++    <!--
++        Backend + database manager login screen debrand.
++
++        web.login_layout (web/views/webclient_templates.xml line ~110)
++        renders the login card. The footer block ("Manage Databases |
++        Powered by Odoo") sits inside a <div class="text-center small
++        mt-4 pt-3 border-top" t-if="not disable_footer">. We strip the
++        "Powered by Odoo" anchor specifically and keep the Manage
++        Databases link (admin operational, not branding).
++    -->
++    <template id="cw_login_layout_debrand"
++              inherit_id="web.login_layout"
++              name="CW Debrand: remove 'Powered by Odoo' from login footer">
++        <xpath expr="//a[contains(@href, 'odoo.com')]" position="replace">
++            <!-- removed: 'Powered by Odoo' login footer link -->
++        </xpath>
++    </template>
++</odoo>
+diff --git a/cw_debrand/views/website_layout.xml b/cw_debrand/views/website_layout.xml
+new file mode 100644
+index 0000000..39f5a31
+--- /dev/null
++++ b/cw_debrand/views/website_layout.xml
+@@ -0,0 +1,43 @@
++<?xml version="1.0" encoding="utf-8"?>
++<odoo>
++    <!--
++        Website + shared frontend debrand.
++
++        "Powered by Odoo" in the website footer is rendered by:
++          web.brand_promotion           - wrapper div, called from
++                                          web.frontend_layout's footer
++            -> web.brand_promotion_message - leaf that outputs the
++                                             "Powered by %s%s" string
++                                             with the embedded Odoo logo
++
++        We CANNOT replace web.brand_promotion's contents - multiple
++        children xpath into it:
++          * website.brand_promotion (regular inherit -> same tree)
++          * website_sale templates (regular inherit -> same tree)
++          * planning.brand_promotion (primary inherit -> separate tree
++            but still validated at parse time against parent)
++        Removing the <t t-call="web.brand_promotion_message"/> inside
++        the wrapper breaks all of those at module-upgrade view
++        validation time.
++
++        Target the leaf instead. web.brand_promotion_message has NO
++        children inheriting from it (verified by grep across all
++        Odoo + enterprise addons), so we can safely strip its output.
++        The wrapper still calls the template - it just renders nothing.
++    -->
++    <template id="cw_brand_promotion_message_debrand"
++              inherit_id="web.brand_promotion_message"
++              name="CW Debrand: blank out 'Powered by Odoo' message">
++        <xpath expr="//t[@t-out]" position="replace">
++            <!--
++                removed: <t t-out="final_message % (odoo_logo, ...)"/>
++                That was the only render statement in the template.
++                Killing it removes the "Powered by " text AND the
++                embedded Odoo logo image at the same time.
++                The two t-set statements above (odoo_logo, final_message)
++                stay but become inert - they only get evaluated when
++                referenced, which now no one does.
++            -->
++        </xpath>
++    </template>
++</odoo>
+-- 
+2.34.1
+

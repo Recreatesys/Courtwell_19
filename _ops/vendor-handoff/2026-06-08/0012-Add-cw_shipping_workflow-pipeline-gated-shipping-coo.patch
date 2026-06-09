@@ -1,0 +1,996 @@
+From 451c2f78b20b9c02b05d46af6de4236456a1bc06 Mon Sep 17 00:00:00 2001
+From: cwintlhk <howardcheng@courtwell.com.hk>
+Date: Mon, 8 Jun 2026 11:45:48 +0200
+Subject: [PATCH 12/14] Add cw_shipping_workflow: pipeline-gated shipping
+ coordination for Aris
+
+---
+ cw_shipping_workflow/__init__.py              |   1 +
+ cw_shipping_workflow/__manifest__.py          |  70 ++++++++++
+ cw_shipping_workflow/data/ir_cron.xml         |  14 ++
+ .../data/mail_activity_type_data.xml          |  32 +++++
+ cw_shipping_workflow/models/__init__.py       |   5 +
+ cw_shipping_workflow/models/crm_lead.py       | 122 ++++++++++++++++++
+ .../models/cw_freight_quote.py                | 121 +++++++++++++++++
+ cw_shipping_workflow/models/cw_shipment.py    | 111 ++++++++++++++++
+ cw_shipping_workflow/models/project_task.py   |  87 +++++++++++++
+ cw_shipping_workflow/models/sale_order.py     |  85 ++++++++++++
+ .../security/cw_shipping_workflow_groups.xml  |  23 ++++
+ .../security/cw_shipping_workflow_rules.xml   |  26 ++++
+ .../security/ir.model.access.csv              |   6 +
+ cw_shipping_workflow/views/crm_lead_views.xml |  21 +++
+ .../views/cw_shipment_views.xml               |  80 ++++++++++++
+ .../views/project_task_views.xml              |  21 +++
+ .../views/sale_order_views.xml                |  23 ++++
+ 17 files changed, 848 insertions(+)
+ create mode 100644 cw_shipping_workflow/__init__.py
+ create mode 100644 cw_shipping_workflow/__manifest__.py
+ create mode 100644 cw_shipping_workflow/data/ir_cron.xml
+ create mode 100644 cw_shipping_workflow/data/mail_activity_type_data.xml
+ create mode 100644 cw_shipping_workflow/models/__init__.py
+ create mode 100644 cw_shipping_workflow/models/crm_lead.py
+ create mode 100644 cw_shipping_workflow/models/cw_freight_quote.py
+ create mode 100644 cw_shipping_workflow/models/cw_shipment.py
+ create mode 100644 cw_shipping_workflow/models/project_task.py
+ create mode 100644 cw_shipping_workflow/models/sale_order.py
+ create mode 100644 cw_shipping_workflow/security/cw_shipping_workflow_groups.xml
+ create mode 100644 cw_shipping_workflow/security/cw_shipping_workflow_rules.xml
+ create mode 100644 cw_shipping_workflow/security/ir.model.access.csv
+ create mode 100644 cw_shipping_workflow/views/crm_lead_views.xml
+ create mode 100644 cw_shipping_workflow/views/cw_shipment_views.xml
+ create mode 100644 cw_shipping_workflow/views/project_task_views.xml
+ create mode 100644 cw_shipping_workflow/views/sale_order_views.xml
+
+diff --git a/cw_shipping_workflow/__init__.py b/cw_shipping_workflow/__init__.py
+new file mode 100644
+index 0000000..0650744
+--- /dev/null
++++ b/cw_shipping_workflow/__init__.py
+@@ -0,0 +1 @@
++from . import models
+diff --git a/cw_shipping_workflow/__manifest__.py b/cw_shipping_workflow/__manifest__.py
+new file mode 100644
+index 0000000..50baf91
+--- /dev/null
++++ b/cw_shipping_workflow/__manifest__.py
+@@ -0,0 +1,70 @@
++{
++    'name': "Courtwell Shipping Workflow",
++    'version': '19.0.1.1.0',
++    'summary': "Pipeline-gated shipping coordination for Aris (Shipping Dept): "
++               "auto-create draft shipments on Proforma Invoice, deposit gate, QC-anchored booking deadline.",
++    'description': """
++Courtwell Shipping Workflow
++===========================
++
++Sits on top of ``cw_shipment`` + ``sourcing_reference`` to drive the
++Shipping Department user's (Aris) workflow off CRM pipeline stage
++transitions.
++
++Phases mapped to existing pipeline stages
++-----------------------------------------
++* Stage 3 (Proforma Invoice) — auto-creates a draft ``cw.shipment``
++  linked to the opportunity; assigns the Shipping responsible user
++  and schedules an activity "Request freight forwarder spot rates".
++* Hilda (Accounting) ticks ``cw_deposit_received`` on the related
++  ``sale.order`` — this schedules an activity on the shipment for
++  Aris: "Coordinate packing list / CBM / crate sizes".
++* QC inspection date set on a ``project.task`` (with
++  ``cw_is_qc_inspection`` flagged) computes a shipping booking
++  deadline of QC date − 7 days and schedules a deadline activity on
++  the shipment. A daily cron warns when the deadline is within 2 days
++  and the shipment is not yet booked.
++
++Security
++--------
++Adds group ``Shipping / User`` with restrictive record rules:
++* ``crm.lead``: read only opportunities at stage sequence >= 3.
++* ``sale.order``: read only SOs whose opportunity passes the same
++  gate (or that have no opportunity).
++
++Post-install setup (manual)
++---------------------------
++After install, the admin must:
++1. Add Aris (shipping@courtwell.com.hk, uid 11) to
++   ``cw_shipping_workflow.group_shipping_user``.
++2. Remove Aris from ``sales_team.group_sale_salesman_all_leads``
++   (the "User: All Documents" group) — otherwise its broad read
++   access OR-overrides this module's stage-gated rules.
++""",
++    'author': "Courtwell",
++    'category': 'Inventory/Purchase',
++    'license': 'LGPL-3',
++    'depends': [
++        'cw_shipment',
++        'sourcing_reference',
++        'crm_project_assign',
++        'sale_crm',
++        'sale_management',
++        'project',
++        'mail',
++    ],
++    'data': [
++        'security/cw_shipping_workflow_groups.xml',
++        'security/ir.model.access.csv',
++        'security/cw_shipping_workflow_rules.xml',
++        'data/mail_activity_type_data.xml',
++        'data/ir_cron.xml',
++        'views/cw_shipment_views.xml',
++        'views/crm_lead_views.xml',
++        'views/sale_order_views.xml',
++        'views/project_task_views.xml',
++    ],
++    'installable': True,
++    'application': False,
++    'auto_install': False,
++}
+diff --git a/cw_shipping_workflow/data/ir_cron.xml b/cw_shipping_workflow/data/ir_cron.xml
+new file mode 100644
+index 0000000..c6c1f76
+--- /dev/null
++++ b/cw_shipping_workflow/data/ir_cron.xml
+@@ -0,0 +1,14 @@
++<?xml version="1.0" encoding="utf-8"?>
++<odoo noupdate="1">
++
++    <record id="ir_cron_check_qc_booking_deadlines" model="ir.cron">
++        <field name="name">CW Shipping: Check QC booking deadlines</field>
++        <field name="model_id" ref="cw_shipment.model_cw_shipment"/>
++        <field name="state">code</field>
++        <field name="code">model._cron_check_qc_booking_deadlines()</field>
++        <field name="interval_number">1</field>
++        <field name="interval_type">days</field>
++        <field name="active" eval="True"/>
++    </record>
++
++</odoo>
+diff --git a/cw_shipping_workflow/data/mail_activity_type_data.xml b/cw_shipping_workflow/data/mail_activity_type_data.xml
+new file mode 100644
+index 0000000..c311120
+--- /dev/null
++++ b/cw_shipping_workflow/data/mail_activity_type_data.xml
+@@ -0,0 +1,32 @@
++<?xml version="1.0" encoding="utf-8"?>
++<odoo noupdate="1">
++
++    <record id="mail_activity_type_request_spot_rates" model="mail.activity.type">
++        <field name="name">Request freight forwarder spot rates</field>
++        <field name="summary">Reach out to forwarders for spot rates and container schedule</field>
++        <field name="delay_count">3</field>
++        <field name="delay_unit">days</field>
++        <field name="res_model">cw.shipment</field>
++        <field name="category">default</field>
++        <field name="icon">fa-ship</field>
++    </record>
++
++    <record id="mail_activity_type_coordinate_packing" model="mail.activity.type">
++        <field name="name">Coordinate packing / CBM / crates</field>
++        <field name="summary">Drill into packing list, CBM, crate sizes with merchandiser and supplier</field>
++        <field name="delay_count">5</field>
++        <field name="delay_unit">days</field>
++        <field name="res_model">cw.shipment</field>
++        <field name="category">default</field>
++        <field name="icon">fa-archive</field>
++    </record>
++
++    <record id="mail_activity_type_book_shipping" model="mail.activity.type">
++        <field name="name">Book shipping plan with forwarder</field>
++        <field name="summary">Confirm container booking, vessel, ETD/ETA at least 7 days before QC</field>
++        <field name="res_model">cw.shipment</field>
++        <field name="category">default</field>
++        <field name="icon">fa-anchor</field>
++    </record>
++
++</odoo>
+diff --git a/cw_shipping_workflow/models/__init__.py b/cw_shipping_workflow/models/__init__.py
+new file mode 100644
+index 0000000..b77c0ca
+--- /dev/null
++++ b/cw_shipping_workflow/models/__init__.py
+@@ -0,0 +1,5 @@
++from . import cw_shipment
++from . import cw_freight_quote
++from . import crm_lead
++from . import sale_order
++from . import project_task
+diff --git a/cw_shipping_workflow/models/crm_lead.py b/cw_shipping_workflow/models/crm_lead.py
+new file mode 100644
+index 0000000..f0060e6
+--- /dev/null
++++ b/cw_shipping_workflow/models/crm_lead.py
+@@ -0,0 +1,122 @@
++import logging
++
++from odoo import _, api, fields, models
++
++_logger = logging.getLogger(__name__)
++
++
++class CrmLead(models.Model):
++    _inherit = 'crm.lead'
++
++    cw_shipment_ids = fields.One2many(
++        'cw.shipment',
++        'opportunity_id',
++        string='Shipments',
++    )
++    cw_shipment_count = fields.Integer(
++        compute='_compute_cw_shipment_count',
++    )
++
++    @api.depends('cw_shipment_ids')
++    def _compute_cw_shipment_count(self):
++        for lead in self:
++            lead.cw_shipment_count = len(lead.cw_shipment_ids)
++
++    def action_view_cw_shipments(self):
++        self.ensure_one()
++        return {
++            'type': 'ir.actions.act_window',
++            'name': _("Shipments"),
++            'res_model': 'cw.shipment',
++            'view_mode': 'list,form',
++            'domain': [('opportunity_id', '=', self.id)],
++            'context': {
++                'default_opportunity_id': self.id,
++                'default_customer_id': self.partner_id.id if self.partner_id else False,
++            },
++        }
++
++    @api.model_create_multi
++    def create(self, vals_list):
++        leads = super().create(vals_list)
++        proforma_stage = self.env.ref(
++            'sourcing_reference.crm_stage_proforma_invoice',
++            raise_if_not_found=False,
++        )
++        if proforma_stage:
++            for lead in leads:
++                if lead.stage_id.id == proforma_stage.id:
++                    lead._cw_ensure_draft_shipment()
++        return leads
++
++    def write(self, vals):
++        result = super().write(vals)
++        if 'stage_id' in vals:
++            proforma_stage = self.env.ref(
++                'sourcing_reference.crm_stage_proforma_invoice',
++                raise_if_not_found=False,
++            )
++            if proforma_stage:
++                for lead in self:
++                    if lead.stage_id.id == proforma_stage.id:
++                        lead._cw_ensure_draft_shipment()
++        return result
++
++    def _cw_ensure_draft_shipment(self):
++        self.ensure_one()
++        Shipment = self.env['cw.shipment']
++        existing = Shipment.search([('opportunity_id', '=', self.id)], limit=1)
++        if existing:
++            return existing
++
++        group = self.env.ref(
++            'cw_shipping_workflow.group_shipping_user',
++            raise_if_not_found=False,
++        )
++        responsible = group.user_ids[:1] if (group and group.user_ids) else self.env.user
++
++        pi_no = self.sourcing_reference or f"DRAFT-OPP-{self.id}"
++        candidate = pi_no
++        n = 1
++        while Shipment.sudo().search_count([('pi_no', '=', candidate)]):
++            n += 1
++            candidate = f"{pi_no}-{n}"
++            if n > 50:
++                _logger.warning(
++                    "cw_shipping_workflow: could not generate unique pi_no for opp %s after 50 tries",
++                    self.id,
++                )
++                return False
++
++        shipment = Shipment.sudo().create({
++            'pi_no': candidate,
++            'opportunity_id': self.id,
++            'sale_order_id': self._cw_find_primary_sale_order(),
++            'customer_id': self.partner_id.id if self.partner_id else False,
++            'responsible_user_id': responsible.id,
++        })
++        if responsible.partner_id:
++            shipment.sudo().message_subscribe(partner_ids=responsible.partner_id.ids)
++
++        shipment.sudo().activity_schedule(
++            act_type_xmlid='cw_shipping_workflow.mail_activity_type_request_spot_rates',
++            summary=_("Request freight forwarder spot rates"),
++            note=_(
++                "Opportunity %(opp)s has reached Proforma Invoice. Reach out to "
++                "freight forwarders for current spot rates and container schedules."
++            ) % {'opp': self.display_name},
++            user_id=responsible.id,
++        )
++        _logger.info(
++            "cw_shipping_workflow: auto-created draft cw.shipment %s for opp %s (pi_no=%s)",
++            shipment.id, self.id, candidate,
++        )
++        return shipment
++
++    def _cw_find_primary_sale_order(self):
++        self.ensure_one()
++        so = self.env['sale.order'].sudo().search(
++            [('opportunity_id', '=', self.id)],
++            order='id desc', limit=1,
++        )
++        return so.id if so else False
+diff --git a/cw_shipping_workflow/models/cw_freight_quote.py b/cw_shipping_workflow/models/cw_freight_quote.py
+new file mode 100644
+index 0000000..4e2e9ab
+--- /dev/null
++++ b/cw_shipping_workflow/models/cw_freight_quote.py
+@@ -0,0 +1,121 @@
++from odoo import _, api, fields, models
++from odoo.exceptions import ValidationError
++
++
++FREIGHT_MODE = [
++    ('sea', 'Sea'),
++    ('air', 'Air'),
++    ('land', 'Land'),
++    ('courier', 'Courier'),
++]
++
++CONTAINER_TYPE = [
++    ('20gp', "20' GP"),
++    ('40gp', "40' GP"),
++    ('40hq', "40' HQ"),
++    ('45hq', "45' HQ"),
++    ('lcl', 'LCL'),
++    ('air', 'Air (per kg)'),
++    ('other', 'Other'),
++]
++
++
++class CwShipmentFreightQuote(models.Model):
++    _name = 'cw.shipment.freight.quote'
++    _description = 'Shipment Freight Quote'
++    _order = 'shipment_id, sequence, id'
++
++    shipment_id = fields.Many2one(
++        'cw.shipment', string='Shipment',
++        required=True, ondelete='cascade', index=True,
++    )
++    sequence = fields.Integer(default=10)
++
++    forwarder_id = fields.Many2one(
++        'res.partner', string='Forwarder', required=True,
++        help='Freight forwarder providing this quote. Must be tagged Service Provider.',
++    )
++    mode = fields.Selection(FREIGHT_MODE, string='Mode', default='sea', required=True)
++    container_type = fields.Selection(CONTAINER_TYPE, string='Container / Unit')
++
++    port_of_loading_id = fields.Many2one('cw.port', string='Port of Loading')
++    destination_port_id = fields.Many2one('cw.port', string='Destination Port')
++
++    rate = fields.Monetary(string='Rate', currency_field='currency_id', required=True)
++    currency_id = fields.Many2one(
++        'res.currency', string='Currency', required=True,
++        default=lambda self: self.env.company.currency_id,
++    )
++
++    quoted_on = fields.Date(string='Quoted On', default=fields.Date.context_today)
++    valid_until = fields.Date(string='Valid Until')
++    transit_days = fields.Integer(string='Transit (days)')
++
++    notes = fields.Text(string='Notes')
++
++    is_selected = fields.Boolean(
++        string='Selected',
++        help='Mark the winning quote. Auto-fills Forwarder, Freight Cost and Currency on the shipment.',
++    )
++
++    @api.constrains('forwarder_id')
++    def _check_forwarder_is_service_provider(self):
++        cat = self.env.ref('cw_shipment.partner_cat_service_provider', raise_if_not_found=False)
++        if not cat:
++            return
++        for q in self:
++            if q.forwarder_id and cat not in q.forwarder_id.category_id:
++                raise ValidationError(_(
++                    "Partner %s is not tagged as Service Provider — cannot be used as a Forwarder on a freight quote.",
++                    q.forwarder_id.display_name,
++                ))
++
++    @api.constrains('valid_until', 'quoted_on')
++    def _check_validity_window(self):
++        for q in self:
++            if q.valid_until and q.quoted_on and q.valid_until < q.quoted_on:
++                raise ValidationError(_("'Valid Until' cannot be earlier than 'Quoted On'."))
++
++    @api.constrains('rate')
++    def _check_rate_positive(self):
++        for q in self:
++            if q.rate <= 0:
++                raise ValidationError(_("Quote rate must be greater than zero."))
++
++    @api.onchange('shipment_id')
++    def _onchange_shipment_defaults(self):
++        for q in self:
++            if q.shipment_id and not q.port_of_loading_id:
++                q.port_of_loading_id = q.shipment_id.port_of_loading_id
++            if q.shipment_id and not q.destination_port_id:
++                q.destination_port_id = q.shipment_id.destination_port_id
++            if q.shipment_id and not q.currency_id:
++                q.currency_id = q.shipment_id.currency_id
++
++    def _sync_to_shipment(self):
++        """For each newly-selected quote, unselect siblings and push values onto the shipment."""
++        for quote in self.filtered('is_selected'):
++            siblings = quote.shipment_id.freight_quote_ids - quote
++            to_clear = siblings.filtered('is_selected')
++            if to_clear:
++                to_clear.with_context(skip_quote_sync=True).write({'is_selected': False})
++            ship_vals = {
++                'forwarder_id': quote.forwarder_id.id,
++                'freight_cost': quote.rate,
++                'currency_id': quote.currency_id.id,
++            }
++            quote.shipment_id.write(ship_vals)
++
++    @api.model_create_multi
++    def create(self, vals_list):
++        records = super().create(vals_list)
++        if not self.env.context.get('skip_quote_sync'):
++            records._sync_to_shipment()
++        return records
++
++    def write(self, vals):
++        res = super().write(vals)
++        sync_triggers = {'is_selected', 'rate', 'forwarder_id', 'currency_id'}
++        if not self.env.context.get('skip_quote_sync') and sync_triggers & vals.keys():
++            self._sync_to_shipment()
++        return res
+diff --git a/cw_shipping_workflow/models/cw_shipment.py b/cw_shipping_workflow/models/cw_shipment.py
+new file mode 100644
+index 0000000..c5e381a
+--- /dev/null
++++ b/cw_shipping_workflow/models/cw_shipment.py
+@@ -0,0 +1,111 @@
++import logging
++from datetime import timedelta
++
++from odoo import _, api, fields, models
++
++_logger = logging.getLogger(__name__)
++
++
++class CwShipment(models.Model):
++    _inherit = 'cw.shipment'
++
++    opportunity_id = fields.Many2one(
++        'crm.lead',
++        string='Opportunity',
++        tracking=True,
++        index=True,
++        domain="[('type', '=', 'opportunity')]",
++    )
++    sale_order_id = fields.Many2one(
++        'sale.order',
++        string='Sales Order',
++        tracking=True,
++        index=True,
++    )
++    responsible_user_id = fields.Many2one(
++        'res.users',
++        string='Shipping Responsible',
++        tracking=True,
++        default=lambda self: self._default_responsible_user(),
++    )
++    project_id = fields.Many2one(
++        'project.project',
++        string='Project',
++        related='opportunity_id.project_id',
++        store=True,
++        readonly=True,
++    )
++    freight_quote_ids = fields.One2many(
++        'cw.shipment.freight.quote',
++        'shipment_id',
++        string='Freight Quotes',
++        copy=True,
++    )
++    freight_quote_count = fields.Integer(
++        string='# Quotes',
++        compute='_compute_freight_quote_count',
++        store=True,
++    )
++
++    @api.depends('freight_quote_ids')
++    def _compute_freight_quote_count(self):
++        for ship in self:
++            ship.freight_quote_count = len(ship.freight_quote_ids)
++
++    @api.model
++    def _default_responsible_user(self):
++        group = self.env.ref(
++            'cw_shipping_workflow.group_shipping_user',
++            raise_if_not_found=False,
++        )
++        if group and group.user_ids:
++            return group.user_ids[:1].id
++        return self.env.user.id
++
++    @api.onchange('opportunity_id')
++    def _onchange_opportunity_id_set_customer(self):
++        for ship in self:
++            if ship.opportunity_id and not ship.customer_id and ship.opportunity_id.partner_id:
++                ship.customer_id = ship.opportunity_id.partner_id
++
++    @api.model
++    def _cron_check_qc_booking_deadlines(self):
++        today = fields.Date.context_today(self)
++        soon = today + timedelta(days=2)
++        Task = self.env['project.task']
++        pending_tasks = Task.search([
++            ('cw_is_qc_inspection', '=', True),
++            ('cw_shipping_booking_deadline', '!=', False),
++            ('cw_shipping_booking_deadline', '<=', soon),
++            ('cw_shipping_booking_deadline', '>=', today),
++        ])
++        if not pending_tasks:
++            return
++        Lead = self.env['crm.lead']
++        for task in pending_tasks:
++            if not task.project_id:
++                continue
++            opp = Lead.search([('project_id', '=', task.project_id.id)], limit=1)
++            if not opp:
++                continue
++            shipment = self.search([
++                ('opportunity_id', '=', opp.id),
++                ('status', 'not in', ('booked', 'shipped', 'arrived', 'delivered', 'cancelled')),
++            ], limit=1, order='id desc')
++            if not shipment:
++                continue
++            shipment.message_post(
++                body=_(
++                    "Shipping booking deadline %(deadline)s is within 2 days "
++                    "(QC inspection on %(qc)s, task %(task)s). "
++                    "Confirm forwarder booking now."
++                ) % {
++                    'deadline': task.cw_shipping_booking_deadline,
++                    'qc': task.cw_qc_inspection_date,
++                    'task': task.display_name,
++                }
++            )
++            _logger.info(
++                "cw_shipping_workflow: deadline warning posted on shipment %s for task %s",
++                shipment.id, task.id,
++            )
+diff --git a/cw_shipping_workflow/models/project_task.py b/cw_shipping_workflow/models/project_task.py
+new file mode 100644
+index 0000000..e8626d6
+--- /dev/null
++++ b/cw_shipping_workflow/models/project_task.py
+@@ -0,0 +1,87 @@
++import logging
++from datetime import timedelta
++
++from odoo import _, api, fields, models
++
++_logger = logging.getLogger(__name__)
++
++
++class ProjectTask(models.Model):
++    _inherit = 'project.task'
++
++    cw_is_qc_inspection = fields.Boolean(
++        string='QC Inspection Task',
++        tracking=True,
++        help="Mark this task as the QC finished-goods inspection. "
++             "Combined with QC Inspection Date, drives the shipping "
++             "booking deadline.",
++    )
++    cw_qc_inspection_date = fields.Date(
++        string='QC Inspection Date',
++        tracking=True,
++    )
++    cw_shipping_booking_deadline = fields.Date(
++        string='Shipping Booking Deadline',
++        compute='_compute_cw_shipping_booking_deadline',
++        store=True,
++        help="Computed deadline for Shipping to book the forwarder: "
++             "QC Inspection Date minus 7 days.",
++    )
++
++    @api.depends('cw_qc_inspection_date', 'cw_is_qc_inspection')
++    def _compute_cw_shipping_booking_deadline(self):
++        for task in self:
++            if task.cw_is_qc_inspection and task.cw_qc_inspection_date:
++                task.cw_shipping_booking_deadline = task.cw_qc_inspection_date - timedelta(days=7)
++            else:
++                task.cw_shipping_booking_deadline = False
++
++    def write(self, vals):
++        result = super().write(vals)
++        triggers = {'cw_qc_inspection_date', 'cw_is_qc_inspection'}
++        if triggers & set(vals.keys()):
++            for task in self:
++                if task.cw_is_qc_inspection and task.cw_qc_inspection_date:
++                    task._cw_notify_shipping_qc_scheduled()
++        return result
++
++    def _cw_notify_shipping_qc_scheduled(self):
++        self.ensure_one()
++        if not self.project_id:
++            return
++        Lead = self.env['crm.lead'].sudo()
++        opp = Lead.search([('project_id', '=', self.project_id.id)], limit=1)
++        if not opp:
++            return
++        Shipment = self.env['cw.shipment'].sudo()
++        shipment = Shipment.search(
++            [
++                ('opportunity_id', '=', opp.id),
++                ('status', 'not in', ('shipped', 'arrived', 'delivered', 'cancelled')),
++            ],
++            order='id desc', limit=1,
++        )
++        if not shipment:
++            return
++
++        responsible = shipment.responsible_user_id or self.env.user
++        shipment.activity_schedule(
++            act_type_xmlid='cw_shipping_workflow.mail_activity_type_book_shipping',
++            date_deadline=self.cw_shipping_booking_deadline,
++            summary=_("Book shipping plan with forwarder before QC"),
++            note=_(
++                "QC inspection scheduled for %(qc)s on task %(task)s. "
++                "Shipping plan must be booked by %(deadline)s "
++                "(QC date − 7 days)."
++            ) % {
++                'qc': self.cw_qc_inspection_date,
++                'task': self.display_name,
++                'deadline': self.cw_shipping_booking_deadline,
++            },
++            user_id=responsible.id,
++        )
++        _logger.info(
++            "cw_shipping_workflow: scheduled booking activity on shipment %s "
++            "tied to QC task %s",
++            shipment.id, self.id,
++        )
+diff --git a/cw_shipping_workflow/models/sale_order.py b/cw_shipping_workflow/models/sale_order.py
+new file mode 100644
+index 0000000..7833e24
+--- /dev/null
++++ b/cw_shipping_workflow/models/sale_order.py
+@@ -0,0 +1,85 @@
++import logging
++
++from odoo import _, api, fields, models
++
++_logger = logging.getLogger(__name__)
++
++
++class SaleOrder(models.Model):
++    _inherit = 'sale.order'
++
++    cw_deposit_received = fields.Boolean(
++        string='Deposit Received',
++        tracking=True,
++        help="Accounting flips this on once the customer deposit has been "
++             "confirmed in the bank account. Triggers Aris (Shipping) to "
++             "coordinate packing details with the supplier.",
++    )
++    cw_deposit_received_date = fields.Date(
++        string='Deposit Received Date',
++        tracking=True,
++    )
++    cw_deposit_confirmed_by = fields.Many2one(
++        'res.users',
++        string='Deposit Confirmed By',
++        readonly=True,
++        tracking=True,
++    )
++
++    def write(self, vals):
++        prior_flag = {so.id: so.cw_deposit_received for so in self}
++        result = super().write(vals)
++        if 'cw_deposit_received' in vals:
++            for so in self:
++                if so.cw_deposit_received and not prior_flag.get(so.id):
++                    so._cw_on_deposit_confirmed()
++        return result
++
++    def _cw_on_deposit_confirmed(self):
++        self.ensure_one()
++        if not self.cw_deposit_received_date:
++            self.sudo().cw_deposit_received_date = fields.Date.context_today(self)
++        if not self.cw_deposit_confirmed_by:
++            self.sudo().cw_deposit_confirmed_by = self.env.user.id
++
++        Shipment = self.env['cw.shipment'].sudo()
++        shipment = Shipment.search([('sale_order_id', '=', self.id)], limit=1)
++        if not shipment and self.opportunity_id:
++            shipment = Shipment.search(
++                [('opportunity_id', '=', self.opportunity_id.id)],
++                order='id desc', limit=1,
++            )
++            if shipment and not shipment.sale_order_id:
++                shipment.sale_order_id = self.id
++        if not shipment:
++            _logger.info(
++                "cw_shipping_workflow: deposit confirmed on SO %s but no linked "
++                "cw.shipment found (no opportunity link?)",
++                self.name,
++            )
++            return
++
++        responsible = shipment.responsible_user_id or self.env.user
++        shipment.activity_schedule(
++            act_type_xmlid='cw_shipping_workflow.mail_activity_type_coordinate_packing',
++            summary=_(
++                "Coordinate packing list / CBM / crate sizes with "
++                "Merchandiser + Supplier"
++            ),
++            note=_(
++                "Deposit confirmed on %(so)s by %(user)s on %(date)s. "
++                "Drill into packing details with the merchandiser and supplier: "
++                "packing list, container packing plan, CBM, size of crates/cartons, "
++                "wooden pallets."
++            ) % {
++                'so': self.name,
++                'user': (self.cw_deposit_confirmed_by or self.env.user).name,
++                'date': self.cw_deposit_received_date,
++            },
++            user_id=responsible.id,
++        )
++        _logger.info(
++            "cw_shipping_workflow: scheduled coordination activity on shipment %s "
++            "after deposit confirmation on SO %s",
++            shipment.id, self.name,
++        )
+diff --git a/cw_shipping_workflow/security/cw_shipping_workflow_groups.xml b/cw_shipping_workflow/security/cw_shipping_workflow_groups.xml
+new file mode 100644
+index 0000000..e1a75fd
+--- /dev/null
++++ b/cw_shipping_workflow/security/cw_shipping_workflow_groups.xml
+@@ -0,0 +1,23 @@
++<?xml version="1.0" encoding="utf-8"?>
++<odoo>
++
++    <record id="module_category_cw_shipping" model="ir.module.category">
++        <field name="name">Shipping</field>
++        <field name="description">Courtwell Shipping Department</field>
++        <field name="sequence">25</field>
++    </record>
++
++    <record id="privilege_cw_shipping" model="res.groups.privilege">
++        <field name="name">Shipping</field>
++        <field name="category_id" ref="module_category_cw_shipping"/>
++        <field name="sequence">10</field>
++    </record>
++
++    <record id="group_shipping_user" model="res.groups">
++        <field name="name">Shipping / User</field>
++        <field name="privilege_id" ref="privilege_cw_shipping"/>
++        <field name="implied_ids" eval="[(4, ref('base.group_user'))]"/>
++        <field name="comment">Shipping Department user. Sees CRM opportunities from Proforma Invoice (stage sequence 3) onwards and owns the cw.shipment record per opportunity. IMPORTANT: members of this group must NOT also be in sales_team.group_sale_salesman_all_leads ("User: All Documents"), otherwise that group's broad read access OR-overrides this module's stage-gated record rules.</field>
++    </record>
++
++</odoo>
+diff --git a/cw_shipping_workflow/security/cw_shipping_workflow_rules.xml b/cw_shipping_workflow/security/cw_shipping_workflow_rules.xml
+new file mode 100644
+index 0000000..3af0f8e
+--- /dev/null
++++ b/cw_shipping_workflow/security/cw_shipping_workflow_rules.xml
+@@ -0,0 +1,26 @@
++<?xml version="1.0" encoding="utf-8"?>
++<odoo noupdate="0">
++
++    <record id="rule_cw_shipping_crm_lead_stage" model="ir.rule">
++        <field name="name">CW Shipping: opps from Proforma Invoice onwards</field>
++        <field name="model_id" ref="crm.model_crm_lead"/>
++        <field name="groups" eval="[(4, ref('cw_shipping_workflow.group_shipping_user'))]"/>
++        <field name="domain_force">[('stage_id.sequence', '&gt;=', 3)]</field>
++        <field name="perm_read" eval="True"/>
++        <field name="perm_write" eval="False"/>
++        <field name="perm_create" eval="False"/>
++        <field name="perm_unlink" eval="False"/>
++    </record>
++
++    <record id="rule_cw_shipping_sale_order_stage" model="ir.rule">
++        <field name="name">CW Shipping: SOs from Proforma stage onwards</field>
++        <field name="model_id" ref="sale.model_sale_order"/>
++        <field name="groups" eval="[(4, ref('cw_shipping_workflow.group_shipping_user'))]"/>
++        <field name="domain_force">['|', ('opportunity_id', '=', False), ('opportunity_id.stage_id.sequence', '&gt;=', 3)]</field>
++        <field name="perm_read" eval="True"/>
++        <field name="perm_write" eval="False"/>
++        <field name="perm_create" eval="False"/>
++        <field name="perm_unlink" eval="False"/>
++    </record>
++
++</odoo>
+diff --git a/cw_shipping_workflow/security/ir.model.access.csv b/cw_shipping_workflow/security/ir.model.access.csv
+new file mode 100644
+index 0000000..98e6bf1
+--- /dev/null
++++ b/cw_shipping_workflow/security/ir.model.access.csv
+@@ -0,0 +1,6 @@
++id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
++access_crm_lead_shipping,crm.lead shipping read,crm.model_crm_lead,cw_shipping_workflow.group_shipping_user,1,0,0,0
++access_sale_order_shipping,sale.order shipping read,sale.model_sale_order,cw_shipping_workflow.group_shipping_user,1,0,0,0
++access_crm_stage_shipping,crm.stage shipping read,crm.model_crm_stage,cw_shipping_workflow.group_shipping_user,1,0,0,0
++access_cw_freight_quote_user,cw.shipment.freight.quote user,model_cw_shipment_freight_quote,base.group_user,1,1,1,1
++access_cw_freight_quote_manager,cw.shipment.freight.quote manager,model_cw_shipment_freight_quote,base.group_system,1,1,1,1
+diff --git a/cw_shipping_workflow/views/crm_lead_views.xml b/cw_shipping_workflow/views/crm_lead_views.xml
+new file mode 100644
+index 0000000..6f8c21c
+--- /dev/null
++++ b/cw_shipping_workflow/views/crm_lead_views.xml
+@@ -0,0 +1,21 @@
++<?xml version="1.0" encoding="utf-8"?>
++<odoo>
++
++    <record id="view_crm_lead_form_workflow_shipment" model="ir.ui.view">
++        <field name="name">crm.lead.form.workflow.shipment</field>
++        <field name="model">crm.lead</field>
++        <field name="inherit_id" ref="sale_crm.crm_case_form_view_oppor"/>
++        <field name="arch" type="xml">
++            <xpath expr="//div[@name='button_box']" position="inside">
++                <button name="action_view_cw_shipments"
++                        type="object"
++                        class="oe_stat_button"
++                        icon="fa-ship"
++                        invisible="cw_shipment_count == 0">
++                    <field name="cw_shipment_count" widget="statinfo" string="Shipments"/>
++                </button>
++            </xpath>
++        </field>
++    </record>
++
++</odoo>
+diff --git a/cw_shipping_workflow/views/cw_shipment_views.xml b/cw_shipping_workflow/views/cw_shipment_views.xml
+new file mode 100644
+index 0000000..54d0fbc
+--- /dev/null
++++ b/cw_shipping_workflow/views/cw_shipment_views.xml
+@@ -0,0 +1,80 @@
++<?xml version="1.0" encoding="utf-8"?>
++<odoo>
++
++    <record id="view_cw_shipment_form_workflow" model="ir.ui.view">
++        <field name="name">cw.shipment.form.workflow</field>
++        <field name="model">cw.shipment</field>
++        <field name="inherit_id" ref="cw_shipment.view_cw_shipment_form"/>
++        <field name="arch" type="xml">
++            <field name="forwarder_id" position="after">
++                <field name="opportunity_id" options="{'no_create': True}"/>
++                <field name="sale_order_id" options="{'no_create': True}"
++                       domain="[('opportunity_id', '=', opportunity_id)]"/>
++                <field name="responsible_user_id"/>
++            </field>
++            <xpath expr="//page[@name='containers']" position="after">
++                <page string="Freight Quotes" name="freight_quotes">
++                    <field name="freight_quote_ids" context="{'default_shipment_id': id}">
++                        <list editable="bottom" decoration-success="is_selected">
++                            <field name="sequence" widget="handle"/>
++                            <field name="forwarder_id"/>
++                            <field name="mode"/>
++                            <field name="container_type"/>
++                            <field name="rate"/>
++                            <field name="currency_id" options="{'no_create': True, 'no_open': True}"/>
++                            <field name="transit_days"/>
++                            <field name="quoted_on"/>
++                            <field name="valid_until"/>
++                            <field name="is_selected" widget="boolean_toggle"/>
++                        </list>
++                        <form string="Freight Quote">
++                            <sheet>
++                                <group>
++                                    <group string="Forwarder">
++                                        <field name="forwarder_id"/>
++                                        <field name="mode"/>
++                                        <field name="container_type"/>
++                                        <field name="transit_days"/>
++                                    </group>
++                                    <group string="Pricing">
++                                        <label for="rate"/>
++                                        <div class="o_row">
++                                            <field name="rate"/>
++                                            <field name="currency_id" options="{'no_create': True, 'no_open': True}"/>
++                                        </div>
++                                        <field name="quoted_on"/>
++                                        <field name="valid_until"/>
++                                        <field name="is_selected" widget="boolean_toggle"/>
++                                    </group>
++                                </group>
++                                <group>
++                                    <group string="Route">
++                                        <field name="port_of_loading_id"/>
++                                        <field name="destination_port_id"/>
++                                    </group>
++                                </group>
++                                <group string="Notes">
++                                    <field name="notes" nolabel="1" placeholder="Free-form notes about this quote..."/>
++                                </group>
++                            </sheet>
++                        </form>
++                    </field>
++                </page>
++            </xpath>
++        </field>
++    </record>
++
++    <record id="view_cw_shipment_list_workflow" model="ir.ui.view">
++        <field name="name">cw.shipment.list.workflow</field>
++        <field name="model">cw.shipment</field>
++        <field name="inherit_id" ref="cw_shipment.view_cw_shipment_list"/>
++        <field name="arch" type="xml">
++            <field name="customer_id" position="after">
++                <field name="opportunity_id" optional="show"/>
++                <field name="sale_order_id" optional="hide"/>
++                <field name="responsible_user_id" optional="show"/>
++            </field>
++        </field>
++    </record>
++
++</odoo>
+diff --git a/cw_shipping_workflow/views/project_task_views.xml b/cw_shipping_workflow/views/project_task_views.xml
+new file mode 100644
+index 0000000..db90ee9
+--- /dev/null
++++ b/cw_shipping_workflow/views/project_task_views.xml
+@@ -0,0 +1,21 @@
++<?xml version="1.0" encoding="utf-8"?>
++<odoo>
++
++    <record id="view_task_form_cw_qc" model="ir.ui.view">
++        <field name="name">project.task.form.cw.qc</field>
++        <field name="model">project.task</field>
++        <field name="inherit_id" ref="project.view_task_form2"/>
++        <field name="arch" type="xml">
++            <xpath expr="//field[@name='date_deadline']" position="after">
++                <field name="cw_is_qc_inspection"/>
++                <field name="cw_qc_inspection_date"
++                       invisible="not cw_is_qc_inspection"
++                       required="cw_is_qc_inspection"/>
++                <field name="cw_shipping_booking_deadline"
++                       invisible="not cw_is_qc_inspection"
++                       readonly="True"/>
++            </xpath>
++        </field>
++    </record>
++
++</odoo>
+diff --git a/cw_shipping_workflow/views/sale_order_views.xml b/cw_shipping_workflow/views/sale_order_views.xml
+new file mode 100644
+index 0000000..837dade
+--- /dev/null
++++ b/cw_shipping_workflow/views/sale_order_views.xml
+@@ -0,0 +1,23 @@
++<?xml version="1.0" encoding="utf-8"?>
++<odoo>
++
++    <record id="view_order_form_cw_deposit" model="ir.ui.view">
++        <field name="name">sale.order.form.cw.deposit</field>
++        <field name="model">sale.order</field>
++        <field name="inherit_id" ref="sale.view_order_form"/>
++        <field name="arch" type="xml">
++            <xpath expr="//field[@name='payment_term_id']" position="after">
++                <field name="cw_deposit_received"
++                       groups="account.group_account_user,cw_shipping_workflow.group_shipping_user"/>
++                <field name="cw_deposit_received_date"
++                       readonly="not cw_deposit_received"
++                       invisible="not cw_deposit_received"
++                       groups="account.group_account_user,cw_shipping_workflow.group_shipping_user"/>
++                <field name="cw_deposit_confirmed_by"
++                       invisible="not cw_deposit_received"
++                       groups="account.group_account_user,cw_shipping_workflow.group_shipping_user"/>
++            </xpath>
++        </field>
++    </record>
++
++</odoo>
+-- 
+2.34.1
+

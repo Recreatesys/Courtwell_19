@@ -1,0 +1,555 @@
+From aa7836b295ee2de2c3b44c90131a0c93454a7424 Mon Sep 17 00:00:00 2001
+From: cwintlhk <howardcheng@courtwell.com.hk>
+Date: Mon, 8 Jun 2026 11:45:48 +0200
+Subject: [PATCH 05/14] Add cw_contacts_restrict: form-only Contacts UI for
+ non-directory staff
+
+---
+ cw_contacts_restrict/__init__.py              |  2 +
+ cw_contacts_restrict/__manifest__.py          | 97 +++++++++++++++++++
+ .../data/menu_action_data.xml                 | 90 +++++++++++++++++
+ .../data/view_lockdown_data.xml               | 45 +++++++++
+ cw_contacts_restrict/hooks.py                 | 19 ++++
+ .../security/cw_contacts_restrict_groups.xml  | 64 ++++++++++++
+ .../security/cw_contacts_restrict_rules.xml   | 62 ++++++++++++
+ .../security/ir.model.access.csv              |  2 +
+ cw_contacts_restrict/wizard/__init__.py       |  1 +
+ cw_contacts_restrict/wizard/contact_lookup.py | 27 ++++++
+ .../wizard/contact_lookup_views.xml           | 46 +++++++++
+ 11 files changed, 455 insertions(+)
+ create mode 100644 cw_contacts_restrict/__init__.py
+ create mode 100644 cw_contacts_restrict/__manifest__.py
+ create mode 100644 cw_contacts_restrict/data/menu_action_data.xml
+ create mode 100644 cw_contacts_restrict/data/view_lockdown_data.xml
+ create mode 100644 cw_contacts_restrict/hooks.py
+ create mode 100644 cw_contacts_restrict/security/cw_contacts_restrict_groups.xml
+ create mode 100644 cw_contacts_restrict/security/cw_contacts_restrict_rules.xml
+ create mode 100644 cw_contacts_restrict/security/ir.model.access.csv
+ create mode 100644 cw_contacts_restrict/wizard/__init__.py
+ create mode 100644 cw_contacts_restrict/wizard/contact_lookup.py
+ create mode 100644 cw_contacts_restrict/wizard/contact_lookup_views.xml
+
+diff --git a/cw_contacts_restrict/__init__.py b/cw_contacts_restrict/__init__.py
+new file mode 100644
+index 0000000..10d627d
+--- /dev/null
++++ b/cw_contacts_restrict/__init__.py
+@@ -0,0 +1,2 @@
++from . import wizard
++from .hooks import uninstall_hook
+diff --git a/cw_contacts_restrict/__manifest__.py b/cw_contacts_restrict/__manifest__.py
+new file mode 100644
+index 0000000..57435db
+--- /dev/null
++++ b/cw_contacts_restrict/__manifest__.py
+@@ -0,0 +1,97 @@
++{
++    'name': "Courtwell Contacts: Restricted View",
++    'version': '19.0.1.0.0',
++    'category': 'Contacts',
++    'summary': "Limit the Contacts app to a form-only UI for everyone except Howard",
++    'description': """
++Courtwell Contacts — Restricted View
++====================================
++
++Goal
++----
++Prevent merchandisers, shipping, and other non-directory staff from
++browsing the full Contacts list / kanban / pivot. They retain the
++ability to:
++
++* Create new contacts via a form
++* Look up an existing contact one at a time via a Many2one autocomplete
++  wizard (no list dialog)
++* Edit contacts they themselves created
++
++The "Contacts / Full Directory Access" group is the single source of
++truth for who sees the full Contacts app. Only Howard is in this group
++by default; assignment is manual via Settings -> Users.
++
++Mechanism
++---------
++1. ``group_contacts_full_view`` — custom group, Howard-only.
++2. ``contacts.menu_contacts`` is gated to that group (only Howard sees
++   the standard Contacts icon and its kanban/list/form/pivot views).
++3. A new top-level menu ``menu_contacts_limited`` ("Contacts") is
++   visible to every internal user. It points at
++   ``action_contacts_limited`` which exposes ``view_mode="form"`` only.
++4. A sub-menu opens the ``cw.contact.lookup`` wizard — a transient
++   model with a single ``res.partner`` Many2one. The autocomplete
++   shows up to ~8 matches as the user types; an "Open Contact" button
++   returns an act_window opening the chosen partner in form view.
++5. ``ir.rule`` rows restrict write/unlink on ``res.partner`` to records
++   the user created themselves, with a permissive bypass rule scoped
++   to ``group_contacts_full_view`` so Howard retains full edit.
++6. On install, the module patches ``groups_id`` of the standard list /
++   kanban res.partner views so they are only visible to Howard. This
++   is defense-in-depth: it also hides the list/kanban from the
++   "Search More" dialog of any res.partner Many2one across the ERP.
++   The ``uninstall_hook`` reverses this patch on module removal.
++
++Trade-offs and known side effects
++---------------------------------
++* **Two Contacts icons for Howard.** Howard sees both the standard
++  Contacts icon (full app) and the limited Contacts icon (form-only).
++  He uses the standard one and ignores the other. Chosen over a
++  server-action branch for simpler XML and easier uninstall.
++
++* **Partner write is restricted to "own only" for ALL non-Howard
++  internal users, system-wide.** This includes accounting, sales, and
++  any other roles. If a merchandiser tries to edit a supplier's phone
++  number from inside a purchase order, the change will be blocked
++  unless that supplier was created by the same user. If this is too
++  tight in practice, the fastest fix is to add
++  ``base.group_system`` (or ``account.group_account_user``) to
++  ``group_contacts_full_view.implied_ids`` so admins / bookkeepers
++  bypass the rule.
++
++* **Ctrl+K command palette** still surfaces contact names that the
++  user has read access to. ACL grants broad read on res.partner
++  (required for partner fields to render across the ERP). The palette
++  shows the partner's form on selection, not a list — acceptable.
++
++* **Module uninstall** restores ``groups_id`` on the standard partner
++  views via the ``uninstall_hook``. The custom group and any user
++  assignments are also removed by the usual Odoo uninstall flow.
++
++Assignment
++----------
++Add Howard to "Contacts / Full Directory Access" via
++Settings -> Users & Companies -> Users -> Howard -> Other -> Contacts.
++This module does not pin a specific user.
++""",
++    'author': 'Courtwell Internal',
++    'website': 'https://courtwell.com.hk',
++    'depends': [
++        'base',
++        'contacts',
++    ],
++    'data': [
++        'security/cw_contacts_restrict_groups.xml',
++        'security/cw_contacts_restrict_rules.xml',
++        'security/ir.model.access.csv',
++        'wizard/contact_lookup_views.xml',
++        'data/menu_action_data.xml',
++        'data/view_lockdown_data.xml',
++    ],
++    'license': 'LGPL-3',
++    'installable': True,
++    'application': False,
++    'auto_install': False,
++    'uninstall_hook': 'uninstall_hook',
++}
+diff --git a/cw_contacts_restrict/data/menu_action_data.xml b/cw_contacts_restrict/data/menu_action_data.xml
+new file mode 100644
+index 0000000..9bd89fa
+--- /dev/null
++++ b/cw_contacts_restrict/data/menu_action_data.xml
+@@ -0,0 +1,90 @@
++<?xml version="1.0" encoding="utf-8"?>
++<odoo>
++    <data noupdate="0">
++
++        <!--
++            Gate the standard Contacts top-level menu to the full-view
++            group. After this update, only members of
++            group_contacts_full_view see the Contacts icon on the home
++            screen and its standard kanban/list/form/pivot action.
++
++            NOTE on persistence: this record updates contacts.menu_contacts
++            from another module's namespace. The change survives upgrades
++            of cw_contacts_restrict (this block has noupdate="0", so the
++            gate is re-applied on each -u). However, a stand-alone
++            -u contacts will rewrite the menu back to its base defaults
++            (no groups_id). If you run -u contacts (or -u base / -u all),
++            follow with -u cw_contacts_restrict to re-apply the gate.
++        -->
++        <record id="contacts.menu_contacts" model="ir.ui.menu">
++            <field name="group_ids" eval="[(6, 0, [ref('cw_contacts_restrict.group_contacts_full_view')])]"/>
++        </record>
++
++        <!--
++            Also gate the underlying act_window so URL-pinning a known
++            action ID cannot bypass the menu gate.
++
++            Field name note: Odoo 19 renamed groups_id -> group_ids on
++            ir.ui.menu, ir.actions.act_window, and ir.ui.view (the M2M
++            to res.groups). ir.rule.groups is unchanged.
++        -->
++        <record id="contacts.action_contacts" model="ir.actions.act_window">
++            <field name="group_ids" eval="[(6, 0, [ref('cw_contacts_restrict.group_contacts_full_view')])]"/>
++        </record>
++
++        <!--
++            Limited action: form-only on res.partner.
++
++            Default action when the user opens the limited "Contacts" menu.
++            view_mode is "form" alone, so no list / kanban / pivot view is
++            available even via URL hacking (?view_type=list returns an
++            error). The action opens a blank create form by default; to
++            find an existing contact, the user takes the "Find Contact"
++            sub-menu which routes through the cw.contact.lookup wizard.
++        -->
++        <record id="action_contacts_limited" model="ir.actions.act_window">
++            <field name="name">New Contact</field>
++            <field name="res_model">res.partner</field>
++            <field name="view_mode">form</field>
++            <field name="target">current</field>
++            <field name="context">{}</field>
++            <field name="help" type="html">
++                <p class="o_view_nocontent_smiling_face">
++                    Create a new contact
++                </p>
++                <p>
++                    Fill in the form to add a new contact. To find an
++                    existing contact, use the "Find Contact" menu instead.
++                </p>
++            </field>
++        </record>
++
++        <!--
++            Top-level limited Contacts menu, visible to every internal
++            user. Howard will see this in addition to the standard
++            Contacts menu; he can ignore it.
++
++            web_icon is intentionally left unset; Odoo falls back to a
++            generic icon. Replace with a custom static/description/icon.png
++            reference if you want a distinct visual.
++        -->
++        <menuitem id="menu_contacts_limited"
++                  name="Contacts"
++                  sequence="80"
++                  groups="base.group_user"
++                  web_icon="contacts,static/description/icon.png"/>
++
++        <menuitem id="menu_contacts_limited_new"
++                  name="New Contact"
++                  parent="menu_contacts_limited"
++                  action="action_contacts_limited"
++                  sequence="10"/>
++
++        <menuitem id="menu_contacts_limited_lookup"
++                  name="Find Contact"
++                  parent="menu_contacts_limited"
++                  action="action_cw_contact_lookup"
++                  sequence="20"/>
++
++    </data>
++</odoo>
+diff --git a/cw_contacts_restrict/data/view_lockdown_data.xml b/cw_contacts_restrict/data/view_lockdown_data.xml
+new file mode 100644
+index 0000000..576ead9
+--- /dev/null
++++ b/cw_contacts_restrict/data/view_lockdown_data.xml
+@@ -0,0 +1,45 @@
++<?xml version="1.0" encoding="utf-8"?>
++<odoo>
++    <data noupdate="0">
++
++        <!--
++            Defense-in-depth: narrow the standard res.partner list and
++            kanban views so they are only loadable by members of
++            group_contacts_full_view.
++
++            ir.ui.view.group_ids (renamed from groups_id in Odoo 18+)
++            controls who is allowed to READ the view
++            definition. When a user lacks access to a view, Odoo falls
++            back to another view of the same type. We gate the only base
++            list and kanban views, so non-Howard users get "no view of
++            this type available" when they try list_view or kanban_view
++            mode anywhere in the ERP — including the "Search More" dialog
++            on every res.partner Many2one field.
++
++            This is data, not metadata: writing to a view shipped by a
++            different module would normally be a code smell. The
++            uninstall_hook in hooks.py reverses the gate when this module
++            is removed, so the change is reversible.
++
++            The <function> tag invokes ir.ui.view.write at install / update
++            time. The eval expression resolves the two XML IDs to record
++            IDs, then issues a single write call.
++
++            If either of the standard view IDs is missing (e.g. a future
++            Odoo version renames base.res_partner_kanban_view), this call
++            will raise. That is intentional — the gate is the whole point
++            of the module, so a missing target should fail loudly rather
++            than silently leave the bulk view exposed.
++        -->
++        <function model="ir.ui.view" name="write" eval="(
++            [
++                ref('base.view_partner_tree'),
++                ref('base.res_partner_kanban_view'),
++            ],
++            {
++                'group_ids': [(6, 0, [ref('cw_contacts_restrict.group_contacts_full_view')])],
++            },
++        )"/>
++
++    </data>
++</odoo>
+diff --git a/cw_contacts_restrict/hooks.py b/cw_contacts_restrict/hooks.py
+new file mode 100644
+index 0000000..c1f4b9a
+--- /dev/null
++++ b/cw_contacts_restrict/hooks.py
+@@ -0,0 +1,19 @@
++def uninstall_hook(env):
++    """Restore the standard res.partner list/kanban views to "all employees"
++    visibility. The install-time <function> in data/view_lockdown_data.xml
++    narrowed group_ids to group_contacts_full_view; here we clear that gate.
++
++    Field name note: Odoo 19 uses group_ids (M2M to res.groups) on
++    ir.ui.view; older Odoo versions called this groups_id.
++    """
++    view_xml_ids = (
++        'base.view_partner_tree',
++        'base.res_partner_kanban_view',
++    )
++    views = env['ir.ui.view']
++    for xml_id in view_xml_ids:
++        view = env.ref(xml_id, raise_if_not_found=False)
++        if view:
++            views |= view
++    if views:
++        views.write({'group_ids': [(5, 0, 0)]})
+diff --git a/cw_contacts_restrict/security/cw_contacts_restrict_groups.xml b/cw_contacts_restrict/security/cw_contacts_restrict_groups.xml
+new file mode 100644
+index 0000000..cc5bb4d
+--- /dev/null
++++ b/cw_contacts_restrict/security/cw_contacts_restrict_groups.xml
+@@ -0,0 +1,64 @@
++<?xml version="1.0" encoding="utf-8"?>
++<odoo>
++    <data noupdate="0">
++
++        <!--
++            Category and privilege for "Contacts / Full Directory Access".
++
++            Mirrors the structure used by cw_shipping_workflow: a custom
++            category + privilege so the group appears under its own heading
++            on the Settings -> Users assignment screen (rather than buried
++            inside the Administration tab).
++        -->
++        <record id="module_category_cw_contacts" model="ir.module.category">
++            <field name="name">Contacts</field>
++            <field name="description">Courtwell Contacts directory access</field>
++            <!--
++                Sequence 25 matches cw_shipping_workflow's "Shipping"
++                category, so the "Contacts / Full Directory Access"
++                checkbox lands in the main groups list on the user form
++                (Settings -> Users -> select user -> Access Rights),
++                next to Shipping / Accounting / etc. A higher sequence
++                (e.g. 75) buries the category behind a collapse, which
++                made the group hard to find during initial assignment
++                on CW19_Test.
++            -->
++            <field name="sequence">25</field>
++        </record>
++
++        <record id="privilege_cw_contacts" model="res.groups.privilege">
++            <field name="name">Contacts</field>
++            <field name="category_id" ref="module_category_cw_contacts"/>
++            <field name="sequence">10</field>
++        </record>
++
++        <!--
++            Full Directory Access — Howard only.
++
++            Members see the standard Contacts app: full kanban, list, form,
++            pivot, all partners writable. A permissive ir.rule
++            (cw_contacts_restrict.rule_partner_full_access_for_howard) gives
++            them a bypass against the default own-only write restriction.
++
++            WARNING: This is the single point of authority for the full
++            contact directory. If Howard is unavailable and someone else
++            needs the bulk view, add them to this group via Settings ->
++            Users -> select user -> Other -> Contacts. The change is live
++            immediately.
++
++            WARNING (matching cw_shipping_workflow's group comment): if a
++            broader installed group grants standard partner list/kanban
++            view access back to a member of this group's restricted users,
++            the gate is OR-overridden. The view_lockdown_data.xml patches
++            base.view_partner_tree and base.res_partner_kanban_view
++            groups_id directly to defend against this.
++        -->
++        <record id="group_contacts_full_view" model="res.groups">
++            <field name="name">Contacts / Full Directory Access</field>
++            <field name="privilege_id" ref="privilege_cw_contacts"/>
++            <field name="implied_ids" eval="[(4, ref('base.group_user'))]"/>
++            <field name="comment">Members see the full Contacts app — kanban, list, pivot, all partners — and can edit any contact. Everyone else in the company is limited to a form-only Contacts UI: they can create new contacts and look up existing contacts by name one at a time via a wizard, and can only edit contacts they created themselves. Howard is the only intended member. If the company needs a backup, add Settings users to this group manually.</field>
++        </record>
++
++    </data>
++</odoo>
+diff --git a/cw_contacts_restrict/security/cw_contacts_restrict_rules.xml b/cw_contacts_restrict/security/cw_contacts_restrict_rules.xml
+new file mode 100644
+index 0000000..21cd987
+--- /dev/null
++++ b/cw_contacts_restrict/security/cw_contacts_restrict_rules.xml
+@@ -0,0 +1,62 @@
++<?xml version="1.0" encoding="utf-8"?>
++<odoo>
++    <data noupdate="0">
++
++        <!--
++            Default rule (applies to every internal user via base.group_user):
++
++            Restricts write and unlink on res.partner to records created by
++            the same user. Read and create are not touched here:
++
++            * Read remains broad (granted via base.group_user's default ACL
++              and unrestricted by rule). Required for partner Many2one
++              fields to render across the ERP — invoices, sale orders,
++              picking, etc.
++
++            * Create stays open via ir.model.access.csv so restricted users
++              can add new contacts from the limited form action and the
++              "Quick Create" path in any Many2one widget.
++
++            Effect: a merchandiser editing an SO can NOT silently overwrite
++            a customer's billing address from inside the SO line, unless
++            they created that customer record themselves. To make a
++            company-wide change to a customer, route the request to Howard.
++
++            Howard (and any other future member of
++            group_contacts_full_view) is exempted by the permissive rule
++            below: ir.rule access decisions OR across groups, so the
++            permissive [(1,'=',1)] domain wins for users in the full-view
++            group.
++        -->
++        <record id="rule_partner_write_own_only" model="ir.rule">
++            <field name="name">CW Contacts: write/unlink own only (default)</field>
++            <field name="model_id" ref="base.model_res_partner"/>
++            <field name="groups" eval="[(4, ref('base.group_user'))]"/>
++            <field name="domain_force">[('create_uid', '=', user.id)]</field>
++            <field name="perm_read" eval="False"/>
++            <field name="perm_write" eval="True"/>
++            <field name="perm_create" eval="False"/>
++            <field name="perm_unlink" eval="True"/>
++        </record>
++
++        <!--
++            Bypass rule for Howard (and any future full-view member).
++
++            Domain [(1,'=',1)] = match everything. perm_read False is
++            intentional: we don't restrict read at the rule layer; the
++            broad read granted by base.group_user is sufficient and
++            avoids accidentally tightening read for the rest of the ERP.
++        -->
++        <record id="rule_partner_full_access_for_howard" model="ir.rule">
++            <field name="name">CW Contacts: full write/unlink for full-view members</field>
++            <field name="model_id" ref="base.model_res_partner"/>
++            <field name="groups" eval="[(4, ref('group_contacts_full_view'))]"/>
++            <field name="domain_force">[(1, '=', 1)]</field>
++            <field name="perm_read" eval="False"/>
++            <field name="perm_write" eval="True"/>
++            <field name="perm_create" eval="False"/>
++            <field name="perm_unlink" eval="True"/>
++        </record>
++
++    </data>
++</odoo>
+diff --git a/cw_contacts_restrict/security/ir.model.access.csv b/cw_contacts_restrict/security/ir.model.access.csv
+new file mode 100644
+index 0000000..9e015ac
+--- /dev/null
++++ b/cw_contacts_restrict/security/ir.model.access.csv
+@@ -0,0 +1,2 @@
++id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
++access_cw_contact_lookup_user,access.cw.contact.lookup.user,model_cw_contact_lookup,base.group_user,1,1,1,1
+diff --git a/cw_contacts_restrict/wizard/__init__.py b/cw_contacts_restrict/wizard/__init__.py
+new file mode 100644
+index 0000000..3be42bb
+--- /dev/null
++++ b/cw_contacts_restrict/wizard/__init__.py
+@@ -0,0 +1 @@
++from . import contact_lookup
+diff --git a/cw_contacts_restrict/wizard/contact_lookup.py b/cw_contacts_restrict/wizard/contact_lookup.py
+new file mode 100644
+index 0000000..58b72ca
+--- /dev/null
++++ b/cw_contacts_restrict/wizard/contact_lookup.py
+@@ -0,0 +1,27 @@
++from odoo import fields, models
++
++
++class CWContactLookup(models.TransientModel):
++    _name = 'cw.contact.lookup'
++    _description = "Look up a single contact by name (form-only access path)"
++
++    partner_id = fields.Many2one(
++        'res.partner',
++        string="Contact",
++        required=True,
++        ondelete='cascade',
++        help="Start typing a name. The autocomplete shows up to a handful of matches; "
++             "select one and click Open Contact to view its form.",
++    )
++
++    def action_open(self):
++        self.ensure_one()
++        return {
++            'type': 'ir.actions.act_window',
++            'name': self.partner_id.display_name,
++            'res_model': 'res.partner',
++            'res_id': self.partner_id.id,
++            'view_mode': 'form',
++            'views': [(False, 'form')],
++            'target': 'current',
++        }
+diff --git a/cw_contacts_restrict/wizard/contact_lookup_views.xml b/cw_contacts_restrict/wizard/contact_lookup_views.xml
+new file mode 100644
+index 0000000..a34ea36
+--- /dev/null
++++ b/cw_contacts_restrict/wizard/contact_lookup_views.xml
+@@ -0,0 +1,46 @@
++<?xml version="1.0" encoding="utf-8"?>
++<odoo>
++    <data>
++
++        <record id="view_cw_contact_lookup_form" model="ir.ui.view">
++            <field name="name">cw.contact.lookup.form</field>
++            <field name="model">cw.contact.lookup</field>
++            <field name="arch" type="xml">
++                <form string="Look up a contact">
++                    <sheet>
++                        <div class="oe_title">
++                            <h2>Find a contact</h2>
++                            <p>
++                                Type a name to find an existing contact. Only individual
++                                matches are shown — there is no full directory list.
++                                To create a new contact instead, use the "New Contact"
++                                menu.
++                            </p>
++                        </div>
++                        <group>
++                            <field name="partner_id"
++                                   options="{'no_create': True, 'no_create_edit': True, 'no_quick_create': True, 'no_open': True}"/>
++                        </group>
++                    </sheet>
++                    <footer>
++                        <button name="action_open"
++                                type="object"
++                                string="Open Contact"
++                                class="btn-primary"/>
++                        <button string="Cancel"
++                                class="btn-secondary"
++                                special="cancel"/>
++                    </footer>
++                </form>
++            </field>
++        </record>
++
++        <record id="action_cw_contact_lookup" model="ir.actions.act_window">
++            <field name="name">Find Contact</field>
++            <field name="res_model">cw.contact.lookup</field>
++            <field name="view_mode">form</field>
++            <field name="target">new</field>
++        </record>
++
++    </data>
++</odoo>
+-- 
+2.34.1
+
