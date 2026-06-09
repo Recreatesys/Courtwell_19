@@ -19,6 +19,10 @@
             </xpath>
 
             <xpath expr="//field[@name='partner_id']" position="before">
+                <field name="project_reference"
+                       readonly="1"
+                       invisible="not project_reference"
+                       force_save="1"/>
                 <field name="sourcing_reference"
                        readonly="1"
                        invisible="not sourcing_reference"
@@ -44,6 +48,7 @@
         <field name="inherit_id" ref="crm.crm_case_tree_view_oppor"/>
         <field name="arch" type="xml">
             <xpath expr="//field[@name='name']" position="after">
+                <field name="project_reference" optional="show"/>
                 <field name="sourcing_reference" optional="show"/>
             </xpath>
         </field>

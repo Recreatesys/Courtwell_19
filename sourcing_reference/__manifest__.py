@@ -1,6 +1,6 @@
 {
     'name': 'CW Sourcing Reference IDs',
-    'version': '19.0.1.2.0',
+    'version': '19.0.1.3.0',
     'summary': 'Auto-generated client/supplier reference IDs, sequence counters, '
                'CRM pipeline stages, and propagation across SO/PO/Project',
     'description': """
@@ -28,6 +28,14 @@ architecture is self-contained.
 v19.0.1.2.0 — RFQ ID scheme switched from {YY}-{NNN} (pool-wide sequence) to
 {Letter}-{NNN} (per-supplier letter + per-supplier RFQ count). Existing RFQs
 keep their legacy IDs; new RFQs use the new format.
+
+v19.0.1.3.0 — Project Reference (PR-) generated at opportunity creation
+rather than waiting for Quotation / SO / Project. New field
+crm.lead.project_reference holds PR-{ClientCode}-{Segment}-{YY}-{NNN}.
+Shares the (Client, Segment) sequence with OP-/QP- so all references for
+one opportunity have the same NNN. project.project.sourcing_reference now
+reads from opp.project_reference directly. Existing opportunities are
+backfilled (leads not touched).
 """,
     'author': 'CW Internal',
     'category': 'Sales/CRM',

@@ -18,7 +18,26 @@ class CrmLead(models.Model):
         tracking=True,
         help='Auto-generated immutable reference ID. Format: '
              'OP-{ClientCode}-{SegmentCode}-{YY}-{NNN}. '
-             'Generated on first entry to the Quotation stage.',
+             'Generated on first entry to the Quotation stage. '
+             'When a Project Reference exists on this opportunity, '
+             'OP- shares its NNN so the two IDs match.',
+    )
+
+    project_reference = fields.Char(
+        string='Project Ref',
+        readonly=True,
+        copy=False,
+        index=True,
+        tracking=True,
+        help='Auto-generated immutable project ID. Format: '
+             'PR-{ClientCode}-{SegmentCode}-{YY}-{NNN}. '
+             'Generated as soon as Client Code and GS1 Segment are '
+             'both set on an opportunity — does not wait for Quotation, '
+             'Sale Order, or Project creation. Becomes the '
+             'project.project.sourcing_reference when a project is '
+             'later linked. Shares the (Client, Segment) sequence '
+             'with OP-/QP- so all references for one opportunity '
+             'have the same NNN.',
     )
 
     gpc_segment_id = fields.Many2one(
@@ -107,21 +126,112 @@ class CrmLead(models.Model):
                 "can progress past Incoming Inquiry."
             ))
 
+    def _can_generate_project_reference(self):
+        """True iff this lead has both prerequisites for PR- generation.
+
+        Used as a guard so that automatic triggers (create/write) can
+        silently skip incomplete records instead of raising. The user-
+        facing validation path is `_validate_inquiry_exit`.
+        """
+        self.ensure_one()
+        if not self.partner_id:
+            return False
+        cc = (self.partner_id.client_code or '').strip()
+        if not cc or not re.fullmatch(r'[A-Z]{2}', cc):
+            return False
+        if not self.gpc_segment_id or not self.gpc_segment_id.code:
+            return False
+        return True
+
+    def _generate_project_reference(self):
+        """Generate PR-{cc}-{seg}-{YY}-{NNN} as soon as both client_code
+        and gpc_segment are set on an opportunity.
+
+        Shares the sourcing.client.sequence counter with OP-/QP- so all
+        references for one opportunity have the same NNN. If a fresh PR-
+        is generated before OP-, the OP-generator later reads from this
+        PR- instead of incrementing the sequence again.
+
+        Idempotent. Concurrency-safe via SELECT ... FOR UPDATE.
+        """
+        self.ensure_one()
+        if self.project_reference:
+            return
+        if self.type != 'opportunity':
+            return
+        if not self._can_generate_project_reference():
+            return
+
+        cc = self.partner_id.client_code.strip().upper()
+        seg = self.gpc_segment_id.code
+
+        # Flush any pending ORM writes so the raw SELECT FOR UPDATE reads
+        # the latest counter value.
+        self.env.flush_all()
+
+        Seq = self.env['sourcing.client.sequence'].sudo()
+        seq = Seq.search([
+            ('partner_id', '=', self.partner_id.id),
+            ('gpc_segment', '=', seg),
+        ], limit=1)
+
+        if seq:
+            self.env.cr.execute(
+                "SELECT count FROM sourcing_client_sequence WHERE id = %s FOR UPDATE",
+                (seq.id,),
+            )
+            row = self.env.cr.fetchone()
+            new_count = (row[0] if row else 0) + 1
+            seq.write({'count': new_count})
+        else:
+            seq = Seq.create({
+                'partner_id': self.partner_id.id,
+                'gpc_segment': seg,
+                'count': 1,
+            })
+            new_count = 1
+
+        yy = fields.Date.context_today(self).strftime('%y')
+        ref = f"PR-{cc}-{seg}-{yy}-{new_count:03d}"
+        self.project_reference = ref
+        self.message_post(body=_("Project Reference generated: %s") % ref)
+        _logger.info("crm.lead %s: generated project_reference %s", self.id, ref)
+
     def _generate_sourcing_reference(self):
         """Generate OP-{cc}-{seg}-{YY}-{NNN} on entry to Quotation.
 
-        Idempotent: if a reference already exists, returns silently.
-        Concurrency-safe: uses a SELECT ... FOR UPDATE row lock on the
-        sequence row to prevent duplicate sequence numbers under
-        simultaneous transitions for the same (client, segment) pair.
+        If a project_reference (PR-...) already exists on this lead — the
+        normal case for new opportunities under v19.0.1.3.0+ — OP- inherits
+        the same NNN by simple prefix-swap. No sequence increment.
+
+        Otherwise (legacy opps with no PR-, or opps where PR- generation
+        was skipped due to missing fields), fall back to the original
+        behaviour: increment the (Client, Segment) sequence to get a
+        fresh NNN.
+
+        Idempotent. Concurrency-safe.
         """
         self.ensure_one()
         if self.sourcing_reference:
             return
         self._validate_inquiry_exit()
 
+        # Path A — derive OP- from existing PR-, preserving the NNN.
+        if self.project_reference and self.project_reference.startswith('PR-'):
+            ref = 'OP-' + self.project_reference[3:]
+            self.sourcing_reference = ref
+            self.message_post(body=_("Sourcing Reference generated: %s") % ref)
+            _logger.info(
+                "crm.lead %s: derived sourcing_reference %s from project_reference",
+                self.id, ref,
+            )
+            return
+
+        # Path B — legacy fallback, increment the shared sequence.
         cc = self.partner_id.client_code.strip().upper()
         seg = self.gpc_segment_id.code
+
+        self.env.flush_all()
 
         Seq = self.env['sourcing.client.sequence'].sudo()
         seq = Seq.search([
@@ -149,7 +259,30 @@ class CrmLead(models.Model):
         ref = f"OP-{cc}-{seg}-{yy}-{new_count:03d}"
         self.sourcing_reference = ref
         self.message_post(body=_("Sourcing Reference generated: %s") % ref)
-        _logger.info("crm.lead %s: generated sourcing_reference %s", self.id, ref)
+        _logger.info("crm.lead %s: generated sourcing_reference %s (legacy path)", self.id, ref)
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        leads = super().create(vals_list)
+        # PR- generation: as soon as both prerequisites are present on
+        # creation of an opportunity. Quiet on failure — incomplete leads
+        # are normal at this stage. `skip_sourcing_validation` context
+        # bypasses for tooling that needs to create raw records.
+        if not self.env.context.get('skip_sourcing_validation'):
+            for lead in leads:
+                if (
+                    lead.type == 'opportunity'
+                    and not lead.project_reference
+                    and lead._can_generate_project_reference()
+                ):
+                    try:
+                        lead._generate_project_reference()
+                    except Exception as e:
+                        _logger.warning(
+                            "crm.lead %s: PR- generation skipped on create: %s",
+                            lead.id, e,
+                        )
+        return leads
 
     def write(self, vals):
         if 'stage_id' in vals and not self.env.context.get('skip_sourcing_validation'):
@@ -165,6 +298,7 @@ class CrmLead(models.Model):
 
         result = super().write(vals)
 
+        # Existing OP- trigger on Quotation stage entry.
         if 'stage_id' in vals and not self.env.context.get('skip_sourcing_validation'):
             for lead in self:
                 if (
@@ -174,6 +308,28 @@ class CrmLead(models.Model):
                     and lead.gpc_segment_id
                 ):
                     lead._generate_sourcing_reference()
+
+        # PR- trigger: fires whenever an existing opportunity's partner,
+        # segment, or type changes such that it now qualifies. Covers:
+        #   * lead -> opportunity conversion
+        #   * partner assigned (and partner has client_code)
+        #   * segment selected
+        # Quiet on failure.
+        pr_triggers = {'partner_id', 'gpc_segment_id', 'type'}
+        if pr_triggers & set(vals.keys()) and not self.env.context.get('skip_sourcing_validation'):
+            for lead in self:
+                if (
+                    lead.type == 'opportunity'
+                    and not lead.project_reference
+                    and lead._can_generate_project_reference()
+                ):
+                    try:
+                        lead._generate_project_reference()
+                    except Exception as e:
+                        _logger.warning(
+                            "crm.lead %s: PR- generation skipped on write: %s",
+                            lead.id, e,
+                        )
 
         return result
 
