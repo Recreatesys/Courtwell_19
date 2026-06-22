@@ -1,0 +1,148 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="0">
+
+        <!-- =====================================================
+             1. CW: Quote — first send
+             Default outbound when the merchandiser issues a
+             quote for the first time. Mirrors cw_debrand's
+             structural choices (no portal CTA, reply to email,
+             user signature rendered at the bottom).
+             ===================================================== -->
+        <record id="cw_mail_quote_first_send" model="mail.template">
+            <field name="name">CW: Quote — first send</field>
+            <field name="model_id" ref="sale.model_sale_order"/>
+            <field name="subject">{{ object.company_id.name }} Quotation {{ object.sourcing_reference or object.name }}</field>
+            <field name="email_from">{{ (object.user_id.email_formatted or user.email_formatted) }}</field>
+            <field name="partner_to">{{ object.partner_id.id }}</field>
+            <field name="lang">{{ object.partner_id.lang }}</field>
+            <field name="auto_delete" eval="False"/>
+            <field name="use_default_to" eval="False"/>
+            <field name="report_template_ids" eval="[(4, ref('sale.action_report_saleorder'))]"/>
+            <field name="body_html" type="html">
+<div style="margin: 0px; padding: 0px;">
+    <p style="margin: 0px; padding: 0px; font-size: 13px;">
+        Dear <t t-out="object.partner_id.name or 'Customer'">Customer</t>,
+        <br/><br/>
+        Please find attached our quotation
+        <span style="font-weight:bold;" t-out="object.sourcing_reference or object.name or ''"/>
+        for your review.
+        <br/><br/>
+        <b>Quotation total:</b>
+        <span style="font-weight:bold;" t-out="format_amount(object.amount_total, object.currency_id) or ''">$ 0.00</span>
+        <br/>
+        <b>Valid until:</b> <t t-out="object.validity_date or ''">[date]</t>
+        <br/>
+        <t t-if="object.payment_term_id">
+            <b>Payment terms:</b> <t t-out="object.payment_term_id.name or ''"/>
+            <br/>
+        </t>
+        <br/>
+        Reply directly to this email with any questions or to confirm.
+        We are happy to walk through specs, lead times, or sourcing
+        options at your convenience.
+        <br/><br/>
+        Best regards,
+        <t t-if="not is_html_empty(object.user_id.signature)">
+            <div style="margin-top: 6px;"><t t-out="object.user_id.signature or ''">Signature</t></div>
+        </t>
+    </p>
+</div>
+            </field>
+        </record>
+
+        <!-- =====================================================
+             2. CW: Quote — gentle follow-up
+             Sent N days after first send when the customer
+             hasn't responded. Reminds about validity expiry
+             without pressure.
+             ===================================================== -->
+        <record id="cw_mail_quote_followup" model="mail.template">
+            <field name="name">CW: Quote — gentle follow-up</field>
+            <field name="model_id" ref="sale.model_sale_order"/>
+            <field name="subject">Follow-up: {{ object.company_id.name }} Quotation {{ object.sourcing_reference or object.name }}</field>
+            <field name="email_from">{{ (object.user_id.email_formatted or user.email_formatted) }}</field>
+            <field name="partner_to">{{ object.partner_id.id }}</field>
+            <field name="lang">{{ object.partner_id.lang }}</field>
+            <field name="auto_delete" eval="False"/>
+            <field name="use_default_to" eval="False"/>
+            <field name="report_template_ids" eval="[(4, ref('sale.action_report_saleorder'))]"/>
+            <field name="body_html" type="html">
+<div style="margin: 0px; padding: 0px;">
+    <p style="margin: 0px; padding: 0px; font-size: 13px;">
+        Dear <t t-out="object.partner_id.name or 'Customer'">Customer</t>,
+        <br/><br/>
+        Following up on quotation
+        <span style="font-weight:bold;" t-out="object.sourcing_reference or object.name or ''"/>,
+        which I sent on
+        <t t-out="object.date_order and object.date_order.strftime('%d %B %Y') or ''">[date]</t>.
+        <br/><br/>
+        The quotation is valid until
+        <b><t t-out="object.validity_date and object.validity_date.strftime('%d %B %Y') or ''">[date]</t></b> —
+        if you'd like to proceed or have questions about specs, lead time,
+        or pricing, simply reply to this email and we'll move things forward.
+        <br/><br/>
+        If the deal is paused on your side or the timing has changed,
+        let us know — we can extend the validity or revise the spec.
+        <br/><br/>
+        Thank you,
+        <t t-if="not is_html_empty(object.user_id.signature)">
+            <div style="margin-top: 6px;"><t t-out="object.user_id.signature or ''">Signature</t></div>
+        </t>
+    </p>
+</div>
+            </field>
+        </record>
+
+        <!-- =====================================================
+             3. CW: Reorder — pricing confirmation
+             Paired with the Reorder template. References the
+             prior PI No. (left as a placeholder for the
+             merchandiser to fill on send) and confirms spec
+             unchanged.
+             ===================================================== -->
+        <record id="cw_mail_reorder_confirmation" model="mail.template">
+            <field name="name">CW: Reorder — pricing confirmation</field>
+            <field name="model_id" ref="sale.model_sale_order"/>
+            <field name="subject">{{ object.company_id.name }} Reorder Quotation {{ object.sourcing_reference or object.name }}</field>
+            <field name="email_from">{{ (object.user_id.email_formatted or user.email_formatted) }}</field>
+            <field name="partner_to">{{ object.partner_id.id }}</field>
+            <field name="lang">{{ object.partner_id.lang }}</field>
+            <field name="auto_delete" eval="False"/>
+            <field name="use_default_to" eval="False"/>
+            <field name="report_template_ids" eval="[(4, ref('sale.action_report_saleorder'))]"/>
+            <field name="body_html" type="html">
+<div style="margin: 0px; padding: 0px;">
+    <p style="margin: 0px; padding: 0px; font-size: 13px;">
+        Dear <t t-out="object.partner_id.name or 'Customer'">Customer</t>,
+        <br/><br/>
+        Attached is the reorder quotation
+        <span style="font-weight:bold;" t-out="object.sourcing_reference or object.name or ''"/>
+        — referenced against your previous order
+        <b>[prior PI No. — please confirm in reply]</b>.
+        <br/><br/>
+        <b>Spec, artwork, packaging:</b> unchanged from the prior run unless
+        explicitly noted on the attached PDF.
+        <br/>
+        <b>Quotation total:</b>
+        <span style="font-weight:bold;" t-out="format_amount(object.amount_total, object.currency_id) or ''">$ 0.00</span>
+        <br/>
+        <b>Lead time:</b> shorter than first run (tooling is approved).
+        <br/>
+        <b>Valid until:</b> <t t-out="object.validity_date or ''">[date]</t>
+        <br/><br/>
+        Reply to confirm and we'll convert to a proforma the same day.
+        If anything in the spec or quantity has changed, mention it
+        and we'll re-quote accordingly.
+        <br/><br/>
+        Best regards,
+        <t t-if="not is_html_empty(object.user_id.signature)">
+            <div style="margin-top: 6px;"><t t-out="object.user_id.signature or ''">Signature</t></div>
+        </t>
+    </p>
+</div>
+            </field>
+        </record>
+
+    </data>
+</odoo>

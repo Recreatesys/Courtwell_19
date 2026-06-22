@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="0">
+
+        <!-- =====================================================
+             1. CW China Custom Merch
+             The DCME-style flow: new custom-branded merchandise
+             from a China factory. 14-day validity, 50% deposit.
+             ===================================================== -->
+        <record id="cw_tpl_china_custom_merch" model="sale.order.template">
+            <field name="name">CW China Custom Merch</field>
+            <field name="active" eval="True"/>
+            <field name="number_of_days">14</field>
+            <field name="prepayment_percent">0.50</field>
+            <field name="require_signature" eval="False"/>
+            <field name="require_payment" eval="False"/>
+            <field name="note" type="html">
+                <p><b>Spec:</b> see attached PDF (artwork, dimensions, Pantone codes, packaging).</p>
+                <p><b>Production:</b> standard lead time 35 days from artwork sign-off and 50% deposit receipt; first sample within 7 days for client approval before mass production.</p>
+                <p><b>Sample fee:</b> deductible from final balance on order confirmation.</p>
+                <p><b>Quantity / Unit Price:</b> TBC by RFQ pending sourcing — final price locks when this quotation is issued as a PI.</p>
+                <p><b>Incoterm:</b> DAP — Hong Kong unless otherwise specified.</p>
+                <p><b>Payment Terms:</b> 50% deposit on order confirmation · balance before shipment (B/L copy).</p>
+                <p><b>Validity:</b> 14 days from issue date.</p>
+            </field>
+        </record>
+
+        <!-- =====================================================
+             2. CW Reorder (Existing SKU)
+             Repeat order on a SKU the customer has approved
+             before. Short validity (decisions are fast), spec
+             unchanged, prior PI No. referenced.
+             ===================================================== -->
+        <record id="cw_tpl_reorder" model="sale.order.template">
+            <field name="name">CW Reorder (Existing SKU)</field>
+            <field name="active" eval="True"/>
+            <field name="number_of_days">7</field>
+            <field name="prepayment_percent">0.50</field>
+            <field name="require_signature" eval="False"/>
+            <field name="require_payment" eval="False"/>
+            <field name="note" type="html">
+                <p><b>Reorder of:</b> PI No. <i>[paste prior PI No. here, e.g. PI-XX-58-26-001]</i> — spec, artwork, and packaging unchanged unless explicitly noted below.</p>
+                <p><b>Lead time:</b> Faster than first run because tooling/artwork is approved; 21 days standard from deposit receipt.</p>
+                <p><b>Pricing:</b> Same as prior PI unless raw-material / freight delta is documented.</p>
+                <p><b>Payment Terms:</b> 50% deposit on order confirmation · balance before shipment.</p>
+                <p><b>Validity:</b> 7 days from issue date.</p>
+            </field>
+        </record>
+
+        <!-- =====================================================
+             3. CW Sample Request
+             Paid pre-production sample. Sample fee non-refundable
+             on a sample-only deal; deductible if a production
+             order follows. 100% prepayment of sample fee.
+             ===================================================== -->
+        <record id="cw_tpl_sample" model="sale.order.template">
+            <field name="name">CW Sample Request</field>
+            <field name="active" eval="True"/>
+            <field name="number_of_days">30</field>
+            <field name="prepayment_percent">1.00</field>
+            <field name="require_signature" eval="False"/>
+            <field name="require_payment" eval="False"/>
+            <field name="note" type="html">
+                <p><b>Sample only — no production volume committed.</b></p>
+                <p><b>Sample fee:</b> Non-refundable on standalone sample orders. Deductible from the final balance if a production order is confirmed within 60 days of sample delivery.</p>
+                <p><b>Lead time:</b> 7–14 days from artwork sign-off (varies by factory).</p>
+                <p><b>Shipping:</b> Express courier (DHL / FedEx) at customer's account unless stated.</p>
+                <p><b>Payment Terms:</b> 100% prepayment of sample fee.</p>
+                <p><b>Validity:</b> 30 days from issue date.</p>
+            </field>
+        </record>
+
+        <!-- =====================================================
+             4. CW Special Pricing (Strategic)
+             GM-cleared margin deals. Always tagged as "not a
+             precedent" so the rate doesn't quietly become the
+             default for that client on future reorders.
+             ===================================================== -->
+        <record id="cw_tpl_strategic" model="sale.order.template">
+            <field name="name">CW Special Pricing (Strategic)</field>
+            <field name="active" eval="True"/>
+            <field name="number_of_days">7</field>
+            <field name="prepayment_percent">0.50</field>
+            <field name="require_signature" eval="True"/>
+            <field name="require_payment" eval="False"/>
+            <field name="note" type="html">
+                <p><b>Strategic Pricing — GM approved</b> [internal ref: <i>insert GM-approval reference / activity link</i>].</p>
+                <p><b>Important — not a precedent:</b> Margin on this quotation is outside Courtwell's standard band and was cleared by the General Manager for this specific transaction. Future quotations to this client revert to standard pricing.</p>
+                <p><b>Signature required</b> on the proforma to lock the agreed price.</p>
+                <p><b>Validity:</b> 7 days from issue date — strategic windows are short.</p>
+                <p><b>Payment Terms:</b> 50% deposit on order confirmation · balance before shipment.</p>
+            </field>
+        </record>
+
+    </data>
+</odoo>
