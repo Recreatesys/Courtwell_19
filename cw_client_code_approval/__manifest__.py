@@ -1,6 +1,6 @@
 {
     'name': "CW Client Code: Manager Approval Workflow",
-    'version': '19.0.1.0.0',
+    'version': '19.0.1.0.1',
     'category': 'Contacts',
     'summary': "Manager-only assignment of 2-letter client codes, with auto-request "
                "activities, chatter @mentions, and a pending-codes worklist.",

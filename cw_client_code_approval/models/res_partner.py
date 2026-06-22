@@ -76,7 +76,11 @@ class ResPartner(models.Model):
         group = self.env.ref(CLIENT_CODE_APPROVER_GROUP, raise_if_not_found=False)
         if not group:
             return self.env['res.users']
-        return group.sudo().users.filtered(lambda u: u.active and not u.share)
+        # res.groups.users was renamed to user_ids in Odoo 18. The old
+        # attribute still appears in tutorials and AI completions; trips
+        # an AttributeError at runtime on any res.partner create() that
+        # would otherwise fire the auto-request flow.
+        return group.sudo().user_ids.filtered(lambda u: u.active and not u.share)
 
     def _request_client_code_assignment(self):
         """Idempotently raise a request for the GM to assign a 2-letter
