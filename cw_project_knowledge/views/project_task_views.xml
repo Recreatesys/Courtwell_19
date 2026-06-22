@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="cw_task_form_knowledge" model="ir.ui.view">
+        <field name="name">project.task.form.cw.knowledge</field>
+        <field name="model">project.task</field>
+        <field name="inherit_id" ref="project.view_task_form2"/>
+        <field name="arch" type="xml">
+            <xpath expr="//notebook" position="inside">
+                <page string="Knowledge Capture" name="cw_knowledge">
+                    <field name="cw_knowledge_note"
+                           placeholder="Findings to roll up into the project's Knowledge Base: client/supplier clarifications, sourcing learnings, confirmed specs, defects to watch, pricing rationale…"/>
+                </page>
+            </xpath>
+        </field>
+    </record>
+
+</odoo>

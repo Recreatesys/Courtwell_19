@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="cw_project_form_knowledge" model="ir.ui.view">
+        <field name="name">project.project.form.cw.knowledge</field>
+        <field name="model">project.project</field>
+        <field name="inherit_id" ref="project.edit_project"/>
+        <field name="arch" type="xml">
+            <xpath expr="//div[@name='button_box']" position="inside">
+                <field name="knowledge_article_id" invisible="1"/>
+                <button class="oe_stat_button" type="object"
+                        name="action_sync_knowledge" icon="fa-refresh"
+                        help="Rebuild this project's Knowledge article from its task notes.">
+                    <div class="o_stat_info">
+                        <span class="o_stat_text">Sync to</span>
+                        <span class="o_stat_text">Knowledge</span>
+                    </div>
+                </button>
+                <button class="oe_stat_button" type="object"
+                        name="action_open_knowledge_article" icon="fa-book"
+                        invisible="not knowledge_article_id">
+                    <div class="o_stat_info">
+                        <span class="o_stat_text">Knowledge</span>
+                        <span class="o_stat_text">Article</span>
+                    </div>
+                </button>
+            </xpath>
+        </field>
+    </record>
+
+</odoo>
