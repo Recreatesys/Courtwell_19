@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ============================================================
+         Extend sale.report_saleorder_document with template-aware
+         visual cues. Conditions key off the sale.order.template
+         name, which we control (defined in
+         data/sale_order_template_data.xml). Name-based matching
+         survives DB transplants and avoids the env.ref / ref()
+         helper which isn't reliably available in this QWeb context.
+
+         The inherit only adds banners and a footer disclaimer — it
+         deliberately does NOT touch the order table, totals, partner
+         block, or signature box, so future Odoo upgrades to the
+         stock report don't conflict with our overlays.
+         ============================================================ -->
+
+    <template id="report_saleorder_cw_extras"
+              inherit_id="sale.report_saleorder_document"
+              priority="20">
+
+        <!-- Banners: inserted at the TOP of the page div, above the
+             stock partner / shipping / line-table content. -->
+        <xpath expr="//div[@class='page']/*[1]" position="before">
+
+            <t t-set="_cw_tpl_name"
+               t-value="doc.sale_order_template_id and doc.sale_order_template_id.name or ''"/>
+
+            <!-- Sample Request banner (amber) -->
+            <div t-if="_cw_tpl_name == 'CW Sample Request'"
+                 style="background:#fff3cd; border:1px solid #f0c36d; color:#664d03;
+                        padding:8px 12px; border-radius:4px; margin-bottom:12px;
+                        font-weight:600; text-align:center;">
+                SAMPLE ONLY — PRE-PRODUCTION · NO PRODUCTION VOLUME COMMITTED
+            </div>
+
+            <!-- Reorder banner (blue) -->
+            <div t-if="_cw_tpl_name == 'CW Reorder (Existing SKU)'"
+                 style="background:#e7f1ff; border:1px solid #b6d4fe; color:#084298;
+                        padding:8px 12px; border-radius:4px; margin-bottom:12px;">
+                <strong>REORDER</strong> — prior order reference:
+                <em>please confirm prior PI No. with the customer</em>.
+                Spec, artwork, and packaging unchanged unless explicitly noted below.
+            </div>
+
+            <!-- Strategic Pricing banner (maroon) -->
+            <div t-if="_cw_tpl_name == 'CW Special Pricing (Strategic)'"
+                 style="background:#722f37; color:#ffffff; padding:10px 14px;
+                        border-radius:4px; margin-bottom:14px; font-weight:700;
+                        letter-spacing:.5px; text-transform:uppercase; text-align:center;">
+                Strategic Pricing — Not a Precedent
+                <div style="font-weight:400; font-size:11px; text-transform:none;
+                            letter-spacing:0; margin-top:4px;">
+                    GM-approved · Future quotations revert to standard pricing
+                </div>
+            </div>
+
+        </xpath>
+
+        <!--
+            NOTE: an earlier draft of this template inserted a footer
+            disclaimer with position="before" on the signature div.
+            That broke the stock t-if / t-else chain on the
+            signature block (the t-else lost its t-if anchor and
+            began evaluating image_data_uri(doc.signature) on False
+            values, triggering a TypeError). The disclaimer text is
+            already in the template's `note` field; we don't need to
+            re-render it here.
+        -->
+
+    </template>
+
+</odoo>

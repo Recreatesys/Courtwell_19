@@ -1,6 +1,6 @@
 {
     'name': 'CW Quote Templates',
-    'version': '19.0.1.0.0',
+    'version': '19.0.1.1.0',
     'category': 'Sales/CRM',
     'summary': "Four sale.order.templates + three customer-facing email "
                "variants for Courtwell's standard quoting patterns "
@@ -49,6 +49,7 @@ brief — they remain visible in the dropdown.
     'data': [
         'data/sale_order_template_data.xml',
         'data/mail_template_data.xml',
+        'reports/report_saleorder_inherit.xml',
     ],
     'license': 'LGPL-3',
     'installable': True,
