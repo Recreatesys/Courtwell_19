@@ -17,7 +17,17 @@ _ops/
 │                               * 0001-*.patch through    text-readable backups
 │                                 NNNN-*.patch            of every commit
 │
-└── backup-recovery/
+├── backup-recovery/
+│   └── RECOVERY.md           Step-by-step restore procedure for
+│                             CW19_Test, written against a specific
+│                             reference backup. Binary backups (DB
+│                             dumps, filestore archives) are NOT tracked
+│                             here — they live on the operator's local
+│                             machine and on the production box.
+│
+└── dev-notes/
+    ├── README.md            Index of topic-grouped engineering notes
+    └── qweb-inherit-gotchas.md   QWeb template-inherit pitfalls
     └── RECOVERY.md           Step-by-step restore procedure for
                               CW19_Test, written against a specific
                               reference backup. Binary backups (DB
