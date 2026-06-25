@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="0">
+
+        <!-- =====================================================
+             Lock the "Shipments" top-level menu to
+             cw_shipping_workflow.group_shipping_user. Users not in
+             that group don't see the menu in the apps drawer.
+             Underlying ir.model.access on cw.shipment etc. is
+             unchanged — auto-creation on stage moves, smart buttons,
+             and form rendering all continue to work for everyone.
+
+             Tuple (6, 0, [...]) replaces any existing groups; the
+             menu was previously unrestricted so this is the first
+             gate applied.
+             ===================================================== -->
+        <record id="cw_shipment.menu_cw_shipment_root" model="ir.ui.menu">
+            <field name="group_ids"
+                   eval="[(6, 0, [ref('cw_shipping_workflow.group_shipping_user')])]"/>
+        </record>
+
+        <!-- =====================================================
+             Lock the "CW Sourcing" top-level menu to the new
+             cw_access_lockdown.group_sourcing_manager group.
+             ===================================================== -->
+        <record id="sourcing_reference.menu_sourcing_root" model="ir.ui.menu">
+            <field name="group_ids"
+                   eval="[(6, 0, [ref('cw_access_lockdown.group_sourcing_manager')])]"/>
+        </record>
+
+    </data>
+</odoo>

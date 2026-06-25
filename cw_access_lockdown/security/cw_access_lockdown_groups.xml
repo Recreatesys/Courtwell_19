@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="0">
+
+        <!-- =====================================================
+             New group: CW Sourcing / Manager
+             Members can see and use the "CW Sourcing" top-level
+             menu (sequence counters, supplier pools, pool member
+             admin views). All cross-module reads of sourcing.*
+             models continue to work for everyone via the existing
+             ir.model.access rules at base.group_user level.
+             ===================================================== -->
+        <record id="group_sourcing_manager" model="res.groups">
+            <field name="name">CW Sourcing / Manager</field>
+            <field name="comment">
+                Members can see and use the CW Sourcing top-level menu
+                (sequence counters, supplier pools, pool-member admin
+                views). Membership is wired by post_init_hook on
+                install: Eva and Howard.
+            </field>
+        </record>
+
+    </data>
+</odoo>
