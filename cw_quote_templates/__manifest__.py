@@ -1,6 +1,6 @@
 {
     'name': 'CW Quote Templates',
-    'version': '19.0.1.1.0',
+    'version': '19.0.1.2.0',
     'category': 'Sales/CRM',
     'summary': "Four sale.order.templates + three customer-facing email "
                "variants for Courtwell's standard quoting patterns "

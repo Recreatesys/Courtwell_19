@@ -70,4 +70,43 @@
 
     </template>
 
+    <!-- ============================================================
+         DEFENSIVE FIX — stock signature-img bug
+
+         The stock report_saleorder_document signature block is:
+
+             <div t-if="not doc.signature" class="oe_structure"/>
+             <div t-else="" ... name="signature">
+                 ...
+                 <img t-att-src="image_data_uri(doc.signature)" .../>
+                 ...
+             </div>
+
+         The t-else binds to the immediately preceding t-if sibling.
+         Any inherit that inserts content BETWEEN the two divs
+         detaches the t-else from its t-if, at which point QWeb
+         renders the t-else unconditionally — including when
+         doc.signature is False. image_data_uri(False) then raises
+         TypeError: 'bool' object is not subscriptable.
+
+         The defensive fix is independent of any specific inherit:
+         add t-if="doc.signature" to the img tag itself. When
+         signature is False, the img simply does not render — no
+         crash, no broken page. When signature is captured (bytes),
+         the img renders normally.
+
+         This is a stock-Odoo-19 bug fix; it would be cleaner upstream
+         in `addons/sale/report/ir_actions_report_templates.xml`, but
+         until that lands we own the guard here.
+         ============================================================ -->
+
+    <template id="report_saleorder_signature_safety"
+              inherit_id="sale.report_saleorder_document"
+              priority="30">
+        <xpath expr="//img[@t-att-src='image_data_uri(doc.signature)']"
+               position="attributes">
+            <attribute name="t-if">doc.signature</attribute>
+        </xpath>
+    </template>
+
 </odoo>
